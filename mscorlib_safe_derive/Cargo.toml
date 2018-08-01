@@ -1,0 +1,12 @@
+[package]
+name = "mscorlib_safe_derive"
+version = "0.1.0"
+authors = ["Tyler Laing <trinioler@gmail.com>"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "0.14.5"
+quote = "0.6.4"
+proc-macro2 = "0.4.9"
