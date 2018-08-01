@@ -495,6 +495,7 @@ pub trait List where Self: PtrContainer<IList> {
     }
 }
 
+//#[incomplete]
 pub trait Assembly where Self: PtrContainer<_Assembly> {
     //implemented by Assembly, which also implements IEvidenceFactory, ICustomAttributeProvider, ISerializable
     //Assembly is an abstract class, implemented by AssemblyBuilder (which lives behind _AssemblyBuilder interface)
@@ -604,7 +605,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         };
         SUCCEEDED!(hr, SafeArray::from(unsafe {*modules}), _Assembly)
     }
-
+    //#[incomplete]
     fn create_instance<V>(&self, _type_name: String, _ignore_case: Option<bool>) -> Result<V> 
     {   /*fn CreateInstance(
             typeName: BSTR,
@@ -733,7 +734,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         };
         SUCCEEDED!(hr, BString::from_ptr_safe(unsafe{*bs}).to_string(), _Assembly)
     }
-
+    //#[todo("Merge both name methods")]
     fn name<A>(&self) -> Result<A>
         where A: PtrContainer<_AssemblyName>
     {
@@ -940,6 +941,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
     }
 }
 
+//#[incomplete]
 pub trait Type where Self: PtrContainer<_Type> {
     /*
     fn Invoke(
@@ -954,7 +956,7 @@ pub trait Type where Self: PtrContainer<_Type> {
     ) -> HRESULT,
 
     */
-
+    //#[incomplete]
     fn constructor(&self) {
         unimplemented!()
     }
@@ -1016,6 +1018,7 @@ pub trait Type where Self: PtrContainer<_Type> {
     }
 
     //still need to implement GetMethod with binder, types, and modifiers
+    //#[todo("GetMethod with binder, types, etc")]
     fn method<M>(&self, name: String, binding_attrs: BindingFlags) -> Result<M> 
         where M: PtrContainer<_MethodInfo> 
     {
@@ -1081,6 +1084,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, unsafe{*vb} > 0, _Type)        
     }
 
+    //#[incomplete]
     fn find_members(&self)
     {
         unimplemented!()
@@ -1097,6 +1101,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, SafeArray::from(unsafe{*ppm}), _Type)
     }
 
+    //#[incomplete]
     fn invoke_member(&self) {
         unimplemented!()
     }
@@ -1181,6 +1186,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, E::from(unsafe {*e}), _Type)
     }
 
+    //#[incomplete]
     fn find_interfaces<TF, T, V, E>(&self, _filter: TF, _criteria: V) -> Result<UnknownSafeArray<T, _Type>> 
         where TF: PtrContainer<_TypeFilter>,
               T: PtrContainer<_Type>,
@@ -1365,6 +1371,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, F::from(t), _Type)
     }
 
+    //#[incomplete]
     fn invoke<T>(&self, _name: Option<&str>, _id: Option<i32>, _args: &[&dyn PtrContainer<T>]) {
         unimplemented!();
     }
@@ -1420,7 +1427,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, BString::from_ptr_safe(bs), _Type)
     }
 }
-
+//#[incomplete]
 pub trait MemberInfo where Self: PtrContainer<_MemberInfo> {
     fn to_str(&self) -> Result<String> {
         let p = self.ptr_mut();
@@ -1508,7 +1515,7 @@ pub trait MemberInfo where Self: PtrContainer<_MemberInfo> {
         SUCCEEDED!(hr, unsafe{*ret} > 0, _MemberInfo)
     }
 }
-
+//#[incomplete]
 pub trait MethodBase where Self: PtrContainer<_MethodBase> {
     PROPERTY!{get_IsPublic _MethodBase { get {public(VARIANT_BOOL)}}}
     PROPERTY!{get_IsPrivate _MethodBase { get {private(VARIANT_BOOL)}}}
@@ -1523,7 +1530,7 @@ pub trait MethodBase where Self: PtrContainer<_MethodBase> {
     PROPERTY!{get_IsSpecialName _MethodBase { get {special_name(VARIANT_BOOL)}}}
     PROPERTY!{get_IsConstructor _MethodBase { get {is_constructor(VARIANT_BOOL)}}}
 }
-
+//#[incomplete]
 pub trait MethodInfo where Self: PtrContainer<_MethodInfo> {
     PROPERTY!{get_Attributes _MethodInfo { get {attributes(MethodAttributes)}}}
     PROPERTY!{get_CallingConvention _MethodInfo { get {calling_convention(CallingConventions)}}}
@@ -1544,7 +1551,7 @@ pub trait MethodInfo where Self: PtrContainer<_MethodInfo> {
     PROPERTY!{get_ReturnTypeCustomAttributes _MethodInfo { get {return_type_custom_attrs(ICustomAttributeProvider)}}}
     PROPERTY!{GetBaseDefinition _MethodInfo { get {base_definition(_MethodInfo)}}}
 }
-
+//#[incomplete]
 pub trait ConstructorInfo where Self: PtrContainer<_ConstructorInfo>
 {
     PROPERTY!{GetType _ConstructorInfo { get {type_of(_Type)}}}
@@ -1564,7 +1571,7 @@ pub trait ConstructorInfo where Self: PtrContainer<_ConstructorInfo>
     PROPERTY!{get_IsSpecialName _ConstructorInfo { get {special_name(VARIANT_BOOL)}}}
     PROPERTY!{get_IsConstructor _ConstructorInfo { get {is_constructor(VARIANT_BOOL)}}}   
 }
-
+//#[incomplete]
 pub trait FieldInfo where Self: PtrContainer<_FieldInfo>  {
     PROPERTY!{get_ToString _FieldInfo { get {to_str(u16)}}}
     PROPERTY!{GetType _FieldInfo { get {type_of(_Type)}}}
@@ -1585,7 +1592,7 @@ pub trait FieldInfo where Self: PtrContainer<_FieldInfo>  {
     PROPERTY!{get_IsSpecialName _FieldInfo { get {special_name(VARIANT_BOOL)}}}
     PROPERTY!{get_IsPinvokeImpl _FieldInfo { get {pinvoke_impl(VARIANT_BOOL)}}}
 }
-
+//#[incomplete]
 pub trait PropertyInfo where Self: PtrContainer<_PropertyInfo> {
     PROPERTY!{get_ToString _PropertyInfo { get {to_str(u16)}}}
     PROPERTY!{GetType _PropertyInfo { get {type_of(_Type)}}}
@@ -1601,7 +1608,7 @@ pub trait PropertyInfo where Self: PtrContainer<_PropertyInfo> {
     PROPERTY!{GetSetMethod_2 _FieldInfo { get {setter(_MethodInfo)}}}
     PROPERTY!{get_IsSpecialName _FieldInfo { get {special_name(VARIANT_BOOL)}}}
 }
-
+//#[incomplete]
 pub trait EventInfo where Self: PtrContainer<_EventInfo> {
     PROPERTY!{get_ToString _EventInfo { get {to_str(u16)}}}
     PROPERTY!{GetType _EventInfo { get {type_of(_Type)}}}
@@ -1612,19 +1619,19 @@ pub trait EventInfo where Self: PtrContainer<_EventInfo> {
     PROPERTY!{get_IsMulticast _EventInfo { get {multicast(VARIANT_BOOL)}}}
     PROPERTY!{get_EventHandlerType _EventInfo { get {event_handler_type(_Type)}}}
 }
-
+//#[incomplete]
 pub trait ParameterInfo where Self: PtrContainer<_ParameterInfo> {
 
 }
-
+//#[incomplete]
 pub trait Module where Self: PtrContainer<_Module> {
     
 }
-
+//#[incomplete]
 pub trait AssemblyName where Self: PtrContainer<_AssemblyName> {
 
 }
-
+//#[incomplete]
 pub trait Binder where Self: PtrContainer<_Binder> {
 
 }
