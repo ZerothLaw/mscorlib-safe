@@ -1,7 +1,6 @@
 #![feature(never_type)]
 
 #[macro_use] extern crate failure;
-extern crate widestring;
 
 extern crate winapi;
 
