@@ -7,30 +7,6 @@ extern crate quote;
 use proc_macro2::{Ident, Span};
 use syn::{DeriveInput, Data, Type};
 
-#[proc_macro_derive(ToVariantUnknown)]
-pub fn to_variant_unknown(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let inp: DeriveInput = syn::parse(input).unwrap();
-    let name = inp.ident;
-
-
-    if let Data::Struct(dta) = inp.data {
-        for field in dta.fields.iter() { 
-            if let Type::Ptr( ref tptr) = field.ty {
-                let gen_t_ptr = tptr;
-                let elem = &tptr.elem;
-                let mut expanded = quote! {
-                    //impl ToVariantUnknown<_Type> for ClrType {} 
-                    impl ToVariantUnknown<#elem> for #name {}
-                };
-
-                return expanded.into()
-            }
-        }
-    }
-    let e = quote!{};
-
-    return e.into();
-}
 // impl PtrContainer<_Type> for ClrType {
 //     fn ptr(&self) -> *const _Type {
 //         self.ptr

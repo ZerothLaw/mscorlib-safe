@@ -2,6 +2,12 @@
 name = "mscorlib_safe_derive"
 version = "0.1.0"
 authors = ["Tyler Laing <trinioler@gmail.com>"]
+description = "Safe wrappers around FFI bindings to mscorlib"
+repository = "https://github.com/ZerothLaw/mscorlib-safe"
+readme = "README.md"
+keywords = ["windows", "com", "mscorlib"]
+categories = ["os::windows-apis", "safe-ffi-bindings", "proc-macro"]
+license = "MIT"
 
 [lib]
 proc-macro = true
