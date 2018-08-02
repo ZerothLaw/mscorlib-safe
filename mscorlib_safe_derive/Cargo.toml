@@ -5,7 +5,7 @@ authors = ["Tyler Laing <trinioler@gmail.com>"]
 description = "Safe wrappers around FFI bindings to mscorlib"
 repository = "https://github.com/ZerothLaw/mscorlib-safe"
 keywords = ["windows", "com", "mscorlib"]
-categories = ["os::windows-apis", "safe-ffi-bindings", "proc-macro"]
+categories = ["os::windows-apis", "api-bindings"]
 license = "MIT"
 
 [lib]
