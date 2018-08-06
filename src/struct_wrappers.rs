@@ -4,8 +4,7 @@ use mscorlib_sys::system::reflection::{_MethodInfo, _Type};
 use mscorlib_sys::system::reflection::InterfaceMapping as comInterfaceMapping;
 
 use wrappers::PtrContainer;
-use safearray::{SafeArray};
-use variant::{WrappedDispatch, PhantomDispatch };
+use safearray::{SafeArray, UnknownSafeArray};
 
 pub struct InterfaceMapping<PtrTarget, PtrInterface, M> 
     where PtrTarget: PtrContainer<_Type>, 
@@ -14,8 +13,8 @@ pub struct InterfaceMapping<PtrTarget, PtrInterface, M>
 {
     pub target: PtrTarget, 
     pub interface: PtrInterface,
-    pub target_methods: SafeArray<WrappedDispatch, M, PhantomDispatch, _MethodInfo, String>,
-    pub interface_methods: SafeArray<WrappedDispatch, M, PhantomDispatch, _MethodInfo, String>,
+    pub target_methods: UnknownSafeArray<M,_MethodInfo>,
+    pub interface_methods: UnknownSafeArray<M, _MethodInfo>,
 }
 
 impl<PtrTarget, PtrInterface, M>  From<comInterfaceMapping> for InterfaceMapping<PtrTarget, PtrInterface, M>  

@@ -1,6 +1,8 @@
-use std::ops::Deref;
+use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::ops::{Deref, Index};
 use std::ptr;
+
 
 use winapi::ctypes::{c_long, c_void};
 use winapi::shared::ntdef::{LONG, ULONG};
@@ -12,6 +14,7 @@ use winapi::um::oaidl::{LPSAFEARRAY, LPSAFEARRAYBOUND, SAFEARRAYBOUND, IDispatch
 use winapi::um::unknwnbase::IUnknown;
 
 use bstring::BString;
+use primitives::Primitive;
 use wrappers::PtrContainer;
 use variant::{WrappedDispatch, WrappedUnknown, PhantomDispatch, PhantomUnknown};
 
@@ -52,7 +55,7 @@ extern "system" {
 }
 
 //newtype it
-pub enum SafeArray<TDispatch, TUnknown, PDispatch, PUnknown, B> 
+pub enum SafeArray<TDispatch, TUnknown, PDispatch, PUnknown, B, TPrimitive> 
     where TDispatch: PtrContainer<PDispatch>, 
           TUnknown: PtrContainer<PUnknown>,
           PDispatch: Deref<Target=IDispatch>,
@@ -62,14 +65,17 @@ pub enum SafeArray<TDispatch, TUnknown, PDispatch, PUnknown, B>
     SafeDispatch(Vec<TDispatch>), 
     SafeUnknown(Vec<TUnknown>), 
     SafeBstr(Vec<B>),
+    SafePrimitive(Vec<Box<Primitive<Target=TPrimitive>>>),
     Empty,
     Phantom(PhantomData<PDispatch>, PhantomData<PUnknown>, !)
 }
 
 pub use SafeArray::*;
 
-pub type DispatchSafeArray<TDispatch, PDispatch> = SafeArray<TDispatch, WrappedUnknown, PDispatch, PhantomUnknown, String>;
-pub type UnknownSafeArray<TUnknown, PUnknown> = SafeArray<WrappedDispatch, TUnknown, PhantomDispatch, PUnknown, String>;
+pub type DispatchSafeArray<TDispatch, PDispatch> = SafeArray<TDispatch, WrappedUnknown, PDispatch, PhantomUnknown, String, i16>;
+pub type UnknownSafeArray<TUnknown, PUnknown> = SafeArray<WrappedDispatch, TUnknown, PhantomDispatch, PUnknown, String, i16>;
+pub type StringSafeArray = SafeArray<WrappedDispatch, WrappedUnknown, PhantomDispatch, PhantomUnknown, String, i16>;
+pub type PrimitiveSafeArray<TPrimitive> = SafeArray<WrappedDispatch, WrappedUnknown, PhantomDispatch, PhantomUnknown, String, TPrimitive>;
 // impl<TD, TU, PD, PU> SafeArray<TD, TU, PD, PU, String> 
 //     where TD: PtrContainer<PD>, 
 //           TU: PtrContainer<PU>,
@@ -81,19 +87,28 @@ pub type UnknownSafeArray<TUnknown, PUnknown> = SafeArray<WrappedDispatch, TUnkn
 //     }
 // }
 
-impl<TD, TU, PD, PU> From<SafeArray<TD, TU, PD, PU, String>> for LPSAFEARRAY 
+impl<TD, TU, PD, PU, TP> From<SafeArray<TD, TU, PD, PU, String, TP>> for LPSAFEARRAY 
     where TD: PtrContainer<PD>, 
           TU: PtrContainer<PU>,
           PD: Deref<Target=IDispatch>,
           PU: Deref<Target=IUnknown>,
+          TP: Debug
 {
-    fn from(array: SafeArray<TD, TU, PD, PU, String>) -> LPSAFEARRAY {
+    fn from(array: SafeArray<TD, TU, PD, PU, String, TP>) -> LPSAFEARRAY {
         let (vartype, sz) = match array {
             SafeDispatch(ref array) => (VT_DISPATCH, array.len()), 
             SafeUnknown(ref array) => (VT_UNKNOWN, array.len()), 
             SafeBstr(ref array) => (VT_BSTR, array.len()), 
+            SafePrimitive(ref array) => {
+                if array.len() > 0 {
+                    let f = array.index(0);
+                    (VARTYPE::from(f.prim_type()) as u32, array.len())
+                }
+                else { (0, 0) }
+            },
             Empty | Phantom(_,_, _) => (0, 0),
         };
+        println!("{:?}", (vartype, sz));
         let mut sab = SAFEARRAYBOUND{ cElements: sz as ULONG, lLbound: 0 as LONG};
         let psa = unsafe {
             SafeArrayCreate(vartype as u16, 1, &mut sab)
@@ -136,6 +151,19 @@ impl<TD, TU, PD, PU> From<SafeArray<TD, TU, PD, PU, String>> for LPSAFEARRAY
                     }
                 }
             },
+            SafePrimitive(array) => {
+                for (ix,elem) in array.into_iter().enumerate() {
+                    let mut elem = elem.get();
+                    println!("elem: {:?}", elem);
+                    let hr = unsafe {
+                        SafeArrayPutElement(psa, &(ix as i32), &mut elem as *mut _ as *mut c_void)
+                    };
+                    match hr {
+                        0 => continue,
+                        _ => panic!("Error: 0x{:x} occurred at index: {}", hr, ix)
+                    }
+                }
+            }
             Empty => {},
             Phantom(_,_,_) => {unreachable!()}
         }
@@ -143,13 +171,13 @@ impl<TD, TU, PD, PU> From<SafeArray<TD, TU, PD, PU, String>> for LPSAFEARRAY
     }
 }
 
-impl<TD, TU, PD, PU> From<LPSAFEARRAY> for SafeArray<TD, TU, PD, PU, String> 
+impl<TD, TU, PD, PU, TP> From<LPSAFEARRAY> for SafeArray<TD, TU, PD, PU, String, TP> 
     where TD: PtrContainer<PD>, 
           TU: PtrContainer<PU>,
           PD: Deref<Target=IDispatch>,
           PU: Deref<Target=IUnknown>,
 {
-    fn from(psa: LPSAFEARRAY) -> SafeArray<TD, TU, PD, PU, String> {
+    fn from(psa: LPSAFEARRAY) -> SafeArray<TD, TU, PD, PU, String, TP> {
         let mut vd = Vec::new();
         let mut vb = Vec::new();
         let mut vu = Vec::new();

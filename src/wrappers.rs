@@ -45,7 +45,7 @@ use mscorlib_sys::system::security::policy::_Evidence;
 use bstring::{BString};
 use variant::{Variant, PhantomDispatch, PhantomUnknown, WrappedDispatch, WrappedUnknown};
 use result::{ClrError, SourceLocation, Result};
-use safearray::{SafeArray, UnknownSafeArray, DispatchSafeArray};
+use safearray::{SafeArray, UnknownSafeArray, DispatchSafeArray, StringSafeArray};
 use struct_wrappers::InterfaceMapping as WrappedInterfaceMapping;
 
 pub trait PtrContainer<T> {
@@ -120,9 +120,9 @@ pub trait Comparer where Self: PtrContainer<IComparer> {
 }
 
 pub trait Dictionary where Self: PtrContainer<IDictionary> {
-    fn item<K, TDispatch, V, TDispatch2>(&self, key: K) -> Result<Variant<V, WrappedUnknown, TDispatch2, PhantomUnknown>>
-        where K: PtrContainer<TDispatch> + From<*mut TDispatch>, 
-              V: PtrContainer<TDispatch2> + From<*mut TDispatch2>,
+    fn item<K, TDispatch, V, TDispatch2>(&self, key: K) -> Result<Variant<V, WrappedUnknown, TDispatch2, PhantomUnknown, i16>>
+        where K: PtrContainer<TDispatch>, 
+              V: PtrContainer<TDispatch2>,
               TDispatch: Deref<Target=IDispatch>, 
               TDispatch2: Deref<Target=IDispatch>
     {
@@ -136,8 +136,8 @@ pub trait Dictionary where Self: PtrContainer<IDictionary> {
     }
 
     fn item_mut<K, V, TDispatch, TDispatch2>(&mut self, key: K, value: V) -> Result<()>
-        where K: PtrContainer<TDispatch> + From<*mut TDispatch>, 
-              V: PtrContainer<TDispatch2> + From<*mut TDispatch2>, 
+        where K: PtrContainer<TDispatch>, 
+              V: PtrContainer<TDispatch2>, 
               TDispatch: Deref<Target=IDispatch>, 
               TDispatch2: Deref<Target=IDispatch>
     {
@@ -648,7 +648,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         SUCCEEDED!(hr, SafeArray::from(unsafe {*attrs}), _Assembly )
     }
     
-    fn manifest_resource_names(&self) -> Result<SafeArray<WrappedDispatch, WrappedUnknown, PhantomDispatch, PhantomUnknown, String>> 
+    fn manifest_resource_names(&self) -> Result<StringSafeArray>
     {
         let p = self.ptr_mut();
         let names: *mut *mut SAFEARRAY = ptr::null_mut();
@@ -1045,7 +1045,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, WrappedInterfaceMapping::from(unsafe{**ppim}), _Type)
     }
 
-    fn instance_of_type<VD, VU, TDispatch, TUnknown>(&self, variant: Variant<VD, VU, TDispatch, TUnknown>) -> Result<bool> 
+    fn instance_of_type<VD, VU, TDispatch, TUnknown>(&self, variant: Variant<VD, VU, TDispatch, TUnknown, i16>) -> Result<bool> 
         where VD: PtrContainer<TDispatch>, 
               TDispatch: Deref<Target=IDispatch>, 
               VU: PtrContainer<TUnknown>, 

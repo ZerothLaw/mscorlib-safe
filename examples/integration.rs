@@ -25,7 +25,7 @@ fn main() {
     vc.push(Fit{ptr: ptr::null_mut()});
     vc.push(Fit{ptr: ptr::null_mut()});
     vc.push(Fit{ptr: ptr::null_mut()});
-    let w: SafeArray<WrappedDispatch, Fit, PhantomDispatch, _Type, String> = SafeArray::SafeUnknown(vc);
+    let w: SafeArray<WrappedDispatch, Fit, PhantomDispatch, _Type, String, i16> = SafeArray::SafeUnknown(vc);
     let s = LPSAFEARRAY::from(w);
     println!("Yay: {:p}", s);
 }

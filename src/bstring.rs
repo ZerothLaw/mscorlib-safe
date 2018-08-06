@@ -14,17 +14,19 @@ pub struct BString {
 	inner: Vec<u16>
 }
 
+//Do not derive Clone - size is not known at compile time
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BStr {
 	size: usize,
 	inner: [u16]
 }
 
-pub fn os_to_wide(s: &OsStr) -> Vec<u16> {
+fn os_to_wide(s: &OsStr) -> Vec<u16> {
 	s.encode_wide().collect()
 }
 
-pub fn os_from_wide(s: &[u16]) -> OsString {
+#[allow(dead_code)]
+fn os_from_wide(s: &[u16]) -> OsString {
 	OsString::from_wide(s)
 }
 

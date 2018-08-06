@@ -3,6 +3,57 @@ use std;
 use winapi::shared::winerror::HRESULT;
 
 #[derive(Debug, Fail)]
+pub enum CommonHresultValues {
+    #[fail(display = "Operation successful")]
+    SOk = 0x00000000,
+    #[fail(display = "Operation aborted")] 
+    EAbort = 0x80004004, 
+    #[fail(display = "General access denied error")]
+    EAccessDenied = 0x80070005, 
+    #[fail(display = "Unspecified failure")]
+    EFail = 0x80004005, 
+    #[fail(display = "Invalid handle")]
+    EHandle = 0x80070006, 
+    #[fail(display = "One or more arguments are invalid")]
+    EInvalidArg = 0x80070057,
+    #[fail(display = "No such interface supported")] 
+    ENoInterface = 0x80004002, 
+    #[fail(display = "Not implemented")]
+    ENotImpl = 0x80004001, 
+    #[fail(display = "Failed to allocate necessary memory")]
+    EOutOfMemory = 0x8007000E,
+    #[fail(display = "Invalid pointer")]
+    EPointer = 0x80004003,
+    #[fail(display = "Unexpected failure")]
+    EUnexpected = 0x8000FFFF, 
+    #[fail(display = "Unknown HRESULT value")]
+    EUnknownValue = 0xFFFFFFFF,
+}
+
+
+pub struct Hresult(HRESULT);
+
+impl From<Hresult> for CommonHresultValues {
+    fn from(hr: Hresult) -> CommonHresultValues{
+        use CommonHresultValues::*;
+        match hr.0 as u32{
+            0x0u32 => SOk, 
+            0x80004004u32 => EAbort, 
+            0x80070005u32 => EAccessDenied, 
+            0x80004005u32 => EFail, 
+            0x80070006u32 => EHandle, 
+            0x80070057u32 => EInvalidArg, 
+            0x80004002u32 => ENoInterface, 
+            0x80004001u32 => ENotImpl, 
+            0x8007000Eu32 => EOutOfMemory, 
+            0x80004003u32 => EPointer, 
+            0x8000FFFFu32 => EUnexpected, 
+            _ => EUnknownValue,
+        }
+    }
+}
+
+#[derive(Debug, Fail)]
 pub enum SourceLocation {
     #[fail(display = "ICollection(line: {})", _0)]
     ICollection(u32),
