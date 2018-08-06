@@ -1,33 +1,31 @@
 //use winapi::um::oaidl::SAFEARRAY;
 
-use mscorlib_sys::system::reflection::{_MethodInfo, _Type};
+use mscorlib_sys::system::reflection::{ _Type};
 use mscorlib_sys::system::reflection::InterfaceMapping as comInterfaceMapping;
 
 use wrappers::PtrContainer;
-use safearray::{SafeArray, UnknownSafeArray};
+use new_safearray::RSafeArray;
 
-pub struct InterfaceMapping<PtrTarget, PtrInterface, M> 
+pub struct InterfaceMapping<PtrTarget, PtrInterface> 
     where PtrTarget: PtrContainer<_Type>, 
-          PtrInterface: PtrContainer<_Type>,
-          M: PtrContainer<_MethodInfo>
+          PtrInterface: PtrContainer<_Type>
 {
     pub target: PtrTarget, 
     pub interface: PtrInterface,
-    pub target_methods: UnknownSafeArray<M,_MethodInfo>,
-    pub interface_methods: UnknownSafeArray<M, _MethodInfo>,
+    pub target_methods: RSafeArray,
+    pub interface_methods: RSafeArray,
 }
 
-impl<PtrTarget, PtrInterface, M>  From<comInterfaceMapping> for InterfaceMapping<PtrTarget, PtrInterface, M>  
+impl<PtrTarget, PtrInterface>  From<comInterfaceMapping> for InterfaceMapping<PtrTarget, PtrInterface>  
     where PtrTarget: PtrContainer<_Type>, 
-          PtrInterface: PtrContainer<_Type>,
-          M: PtrContainer<_MethodInfo>
+          PtrInterface: PtrContainer<_Type>
 {
-    fn from(cim: comInterfaceMapping) -> InterfaceMapping<PtrTarget, PtrInterface, M> {
+    fn from(cim: comInterfaceMapping) -> InterfaceMapping<PtrTarget, PtrInterface> {
         InterfaceMapping {
             target: PtrTarget::from(cim.TargetType), 
             interface: PtrInterface::from(cim.interfaceType), 
-            target_methods: SafeArray::from(cim.TargetMethods), 
-            interface_methods: SafeArray::from(cim.InterfaceMethods)
+            target_methods: RSafeArray::from(cim.TargetMethods), 
+            interface_methods: RSafeArray::from(cim.InterfaceMethods)
         }
     }
 }

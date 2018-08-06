@@ -132,6 +132,8 @@ macro_rules! FROM_IMPLS {
     };
 }
 
+
+
 FROM_IMPLS!{
     (prim => i16,  I16)
     (prim => i32,  I32)

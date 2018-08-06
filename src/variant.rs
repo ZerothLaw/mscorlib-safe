@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::ptr;
 
 use winapi::shared::wtypes::{VT_DISPATCH, VT_UNKNOWN, VARTYPE};
-use winapi::shared::wtypes::{CY, DATE, VT_I8};
+use winapi::shared::wtypes::{CY, DATE};
 use winapi::shared::wtypesbase::SCODE;
 
 use winapi::um::oaidl::{IDispatch, VARIANT, VARIANT_n3, __tagVARIANT, VARIANT_n1};

@@ -6,6 +6,7 @@ use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use winapi::shared::minwindef::UINT;
 use winapi::um::oleauto::{SysAllocStringLen, SysStringLen};
 
+use new_variant::Variant;
 use wrappers::PtrContainer;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -130,5 +131,9 @@ impl PtrContainer<u16> for BString {
 	}
 	fn from(pmu: *mut u16) -> BString {
 		BString::from_ptr_safe(pmu)
+	}
+
+	fn into_variant(&self) -> Variant {
+		Variant::from(unsafe{self.as_sys()})
 	}
 }

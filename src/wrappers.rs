@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
-use std::ops::Deref;
+use std::mem;
 use std::ptr;
 
 use winapi::ctypes::{c_long};
@@ -25,474 +25,32 @@ use winapi::shared::ntdef::LOCALE_NEUTRAL;
 use winapi::shared::wtypes::BSTR;
 use winapi::shared::wtypes::VARIANT_BOOL;
 
-use winapi::um::oaidl::{IDispatch};
 use winapi::um::oaidl::ITypeInfo;
 use winapi::um::oaidl::VARIANT;
 use winapi::um::oaidl::SAFEARRAY;
 use winapi::um::unknwnbase::{IUnknown};
 
-use mscorlib_sys::system::{_Array, _Attribute, _Version, IComparable, RuntimeTypeHandle};
+use mscorlib_sys::system::{_Attribute, _Version, RuntimeTypeHandle};
 use mscorlib_sys::system::io::{_FileStream, _Stream};
 use mscorlib_sys::system::globalization::_CultureInfo;
 use mscorlib_sys::system::reflection::{_Assembly, _AssemblyName, _Binder, _ConstructorInfo, _FieldInfo, _EventInfo, _ManifestResourceInfo, _MemberInfo, 
 _MethodBase,_MethodInfo, _Module, _ParameterInfo, _PropertyInfo, _Type, _TypeFilter};
 use mscorlib_sys::system::reflection::{BindingFlags, CallingConventions, ICustomAttributeProvider, InterfaceMapping, MemberTypes, MethodAttributes, TypeAttributes};
-use mscorlib_sys::system::collections::{DictionaryEntry, ICollection, IComparer, IDictionary, IDictionaryEnumerator, 
-IEnumerable, IEnumerator, IEqualityComparer, IHashCodeProvider, IList};
+
 use mscorlib_sys::system::security::policy::_Evidence;
 
 
 use bstring::{BString};
-use variant::{Variant, PhantomDispatch, PhantomUnknown, WrappedDispatch, WrappedUnknown};
+use new_safearray::RSafeArray;
+use new_variant::Variant;
 use result::{ClrError, SourceLocation, Result};
-use safearray::{SafeArray, UnknownSafeArray, DispatchSafeArray, StringSafeArray};
 use struct_wrappers::InterfaceMapping as WrappedInterfaceMapping;
 
 pub trait PtrContainer<T> {
     fn ptr(&self) -> *const T;
     fn ptr_mut(&self) -> *mut T;
     fn from(p: *mut T) -> Self where Self:Sized;
-}
-
-pub trait Collection where Self: PtrContainer<ICollection> {
-    fn copy_to<R>(&self, index: i32, rhs: &R) -> Result<()>
-        where R: PtrContainer<_Array>
-    {
-        let lhs_ptr: *mut ICollection = self.ptr_mut();
-        let rhs_vt = rhs.ptr_mut();
-        let hr = unsafe {
-            (*lhs_ptr).CopyTo(rhs_vt, index)
-        };
-        SUCCEEDED!(hr, (), ICollection)
-    }
-
-    fn count(&self) -> Result<i32>{
-        let mut p_c: c_long = 0;
-        let p = self.ptr_mut();
-        let hr = unsafe{
-            (*p).get_Count(&mut p_c)
-        };
-        SUCCEEDED!(hr, p_c, ICollection)
-    }
-
-    fn synchronized(&self) -> Result<bool>{
-        let mut vb: VARIANT_BOOL = 0;
-        let p = self.ptr_mut();
-        let hr = unsafe {
-            (*p).get_IsSynchronized(&mut vb)
-        };
-        let b = vb > 0;
-        SUCCEEDED!(hr, b, ICollection)
-    }
-}
-
-pub trait Comparable where Self: PtrContainer<IComparable> {
-    fn compare<R, T>(&self, rhs: R) -> Result<i32>
-        where R: Comparable + PtrContainer<IComparable> + From<*mut IComparable>
-    {
-        let lhs_ptr: *mut IComparable = self.ptr_mut();
-        let rhs_vt = DISPATCH!(rhs: R: IComparable);
-        let mut ret: c_long = 0;
-        let hr = unsafe {
-            (*lhs_ptr).CompareTo(rhs_vt, &mut ret)
-        };
-
-        SUCCEEDED!(hr, ret, IComparable)
-    }
-}
-
-pub trait Comparer where Self: PtrContainer<IComparer> {
-    fn compare<L, R, TLeft, TRight>(&self, lhs: L, rhs: R) -> Result<i32>
-        where L: PtrContainer<TLeft> + From<*mut TLeft>, 
-              R: PtrContainer<TRight> + From<*mut TRight>, 
-              TLeft: Deref<Target=IDispatch>, 
-              TRight: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let lhs_vt = DISPATCH!(lhs: L: TLeft);
-        let rhs_vt = DISPATCH!(rhs: R: TRight);
-        let mut ret: c_long = 0;
-        let hr = unsafe {
-            (*p).Compare(lhs_vt, rhs_vt, &mut ret)
-        };
-        SUCCEEDED!(hr, ret, IComparer)
-    }
-}
-
-pub trait Dictionary where Self: PtrContainer<IDictionary> {
-    fn item<K, TDispatch, V, TDispatch2>(&self, key: K) -> Result<Variant<V, WrappedUnknown, TDispatch2, PhantomUnknown, i16>>
-        where K: PtrContainer<TDispatch>, 
-              V: PtrContainer<TDispatch2>,
-              TDispatch: Deref<Target=IDispatch>, 
-              TDispatch2: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(key: K: TDispatch);
-        let p_ret: *mut VARIANT = ptr::null_mut();
-        let hr = unsafe {
-            (*p).get_Item(vt, p_ret)
-        };
-        SUCCEEDED!(hr, Variant::from(p_ret), IDictionary)
-    }
-
-    fn item_mut<K, V, TDispatch, TDispatch2>(&mut self, key: K, value: V) -> Result<()>
-        where K: PtrContainer<TDispatch>, 
-              V: PtrContainer<TDispatch2>, 
-              TDispatch: Deref<Target=IDispatch>, 
-              TDispatch2: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let kvt = DISPATCH!(key: K: TDispatch);
-        let vvt = DISPATCH!(value: V: TDispatch2);
-        let hr = unsafe {
-            (*p).putref_Item(kvt, vvt)
-        };
-        SUCCEEDED!(hr, (), IDictionary)
-    }
-
-    fn keys<C: Collection>(&self) -> Result<C>
-    {
-        let p = self.ptr_mut();
-        let mut pic: *mut ICollection = ptr::null_mut();
-        let hr = unsafe {
-            (*p).get_Keys(&mut pic)
-        };
-        SUCCEEDED!(hr, C::from(pic), IDictionary)
-    }
-
-    fn values<C: Collection>(&self) -> Result<C>
-    {
-        let p = self.ptr_mut();
-        let mut pic: *mut ICollection = ptr::null_mut();
-        let hr = unsafe {
-            (*p).get_Values(&mut pic)
-        };
-        SUCCEEDED!(hr, C::from(pic), IDictionary)
-    }
-
-    fn contains<TOut, V>(&self, obj: V) -> Result<bool>
-        where V: PtrContainer<TOut>, 
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let pvt = DISPATCH!(obj: V: TOut);
-        let mut pb: VARIANT_BOOL = 0;
-        let hr = unsafe {
-            (*p).Contains(pvt, &mut pb)
-        };
-        SUCCEEDED!(hr, pb > 0, IDictionary)
-    }
-
-    fn add<K, V, TKey, TValue>(&self, key: K, value: V) -> Result<()>
-        where K: PtrContainer<TKey>,
-              V: PtrContainer<TValue>, 
-              TKey: Deref<Target=IDispatch>, 
-              TValue: Deref<Target=IDispatch>
-    {
-        let k = DISPATCH!(key:K:TKey);
-        let v = DISPATCH!(value:V:TValue);
-        let p = self.ptr_mut();
-        let hr = unsafe {
-            (*p).Add(k, v)
-        };
-        SUCCEEDED!(hr, (), IDictionary)
-    }
-    
-    fn clear(&self) -> Result<()>{
-        let p = self.ptr_mut();
-        let hr = unsafe {
-            (*p).Clear()
-        };
-        SUCCEEDED!(hr, (), IDictionary)
-    }
-
-    fn read_only(&self) -> Result<bool>{
-        let p = self.ptr_mut();
-        let mut vb: VARIANT_BOOL = 0;
-        let hr = unsafe {
-            (*p).get_IsReadOnly(&mut vb)
-        };
-        SUCCEEDED!(hr, vb > 0, IDictionary)
-    }
-
-    fn fixed_size(&self) -> Result<bool>{
-        let p = self.ptr_mut();
-        let mut vb: VARIANT_BOOL = 0;
-        let hr = unsafe {
-            (*p).get_IsFixedSize(&mut vb)
-        };
-        SUCCEEDED!(hr, vb > 0, IDictionary)
-    }
-
-    fn enumerator<DE>(&self) -> Result<DE>
-        where DE: From<*mut IDictionaryEnumerator>
-    {
-        let p = self.ptr_mut();
-        let mut pde: *mut IDictionaryEnumerator = ptr::null_mut();
-        let hr = unsafe {
-            (*p).GetEnumerator(&mut pde)
-        };
-        SUCCEEDED!(hr, DE::from(pde), IDictionary)
-    }
-
-    fn remove<K, TOut>(&self, key: K) -> Result<()>
-        where K: PtrContainer<TOut> + From<*mut TOut>,
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(key:K:TOut);
-        let hr = unsafe {
-            (*p).Remove(vt)
-        };
-        SUCCEEDED!(hr, (), IDictionary)
-    }
-}
-
-pub trait DictionaryEnumerator where Self: PtrContainer<IDictionaryEnumerator> {
-    fn key<DV>(&self) -> Result<DV>
-        where DV: From<*mut VARIANT>
-    {
-        let p = self.ptr_mut();
-        let pvt: *mut VARIANT = ptr::null_mut();
-        let hr = unsafe {
-            (*p).get_key(pvt)
-        };
-        SUCCEEDED!(hr, DV::from(pvt), IDictionaryEnumerator)
-    }
-
-    fn value<DV>(&self) -> Result<DV>
-        where DV: From<*mut VARIANT>
-    {
-        let p = self.ptr_mut();
-        let pvt: *mut VARIANT = ptr::null_mut();
-        let hr = unsafe {
-            (*p).get_val(pvt)
-        };
-        SUCCEEDED!(hr, DV::from(pvt), IDictionaryEnumerator)
-    }
-
-    fn entry<DE>(&self) -> Result<DE>
-        where DE: From<*mut DictionaryEntry>
-    {
-        let p = self.ptr_mut();
-        let pde: *mut DictionaryEntry = ptr::null_mut();
-        let hr = unsafe {
-            (*p).get_Entry(pde)
-        };
-        SUCCEEDED!(hr, DE::from(pde), IDictionaryEnumerator)
-    }
-}
-
-pub trait Enumerable where Self: PtrContainer<IEnumerable> {
-    fn enumerator<EN>(&self) -> Result<EN>
-        where EN: From<*mut IEnumerator>
-    {
-        let p = self.ptr_mut();
-        let mut pie: *mut IEnumerator = ptr::null_mut();
-        let hr = unsafe {
-            (*p).GetEnumerator(&mut pie)
-        };
-
-        SUCCEEDED!(hr, EN::from(pie), IEnumerable)
-    }
-}
-
-pub trait Enumerator where Self: PtrContainer<IEnumerator> {
-    fn move_next(&self) -> Result<bool>{
-        let p = self.ptr_mut();
-        let mut vb: VARIANT_BOOL = 0;
-        let hr = unsafe {
-            (*p).MoveNext(&mut vb)
-        };
-        SUCCEEDED!(hr, vb > 0,IEnumerator)
-    }
-    
-    fn current<V>(&self) -> Result<V>
-        where V: From<*mut VARIANT>
-    {
-        let p = self.ptr_mut();
-        let vt: *mut VARIANT = ptr::null_mut();
-        let hr = unsafe {
-            (*p).get_Current(vt)
-        };
-        SUCCEEDED!(hr, V::from(vt),IEnumerator)
-    }
-
-    fn reset(&self) -> Result<()>{
-        let p = self.ptr_mut();
-        let hr = unsafe {
-            (*p).Reset()
-        };
-        SUCCEEDED!(hr, (), IEnumerator)
-    }
-}
-
-pub trait EqualityComparer where Self: PtrContainer<IEqualityComparer> {
-    fn equals<X, Y, TOut>(&self, x: X, y: Y) -> Result<bool>
-        where X: PtrContainer<TOut>, 
-              Y: PtrContainer<TOut>, 
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let xvt = DISPATCH!(x:X:TOut);
-        let yvt = DISPATCH!(y:Y:TOut);
-
-        let mut vb: VARIANT_BOOL = 0;
-        let hr = unsafe {
-            (*p).Equals(xvt, yvt, &mut vb)
-        };
-        SUCCEEDED!(hr, vb > 0, IEqualityComparer)
-    }
-
-    fn hash<V, TOut>(&self, obj: V) -> Result<c_long>
-        where V: PtrContainer<TOut>, 
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(obj:V:TOut);
-        let mut cl: c_long = 0;
-        let hr = unsafe {
-            (*p).GetHashCode(vt, &mut cl)
-        };
-        SUCCEEDED!(hr, cl, IEqualityComparer)
-    }
-}
-
-pub trait HashCodeProvider where Self: PtrContainer<IHashCodeProvider> {
-    fn hash<V, TOut>(&self, obj: V) -> Result<c_long>
-        where V: PtrContainer<TOut> + From<*mut TOut>, 
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(obj:V:TOut);
-        let mut cl: c_long = 0;
-        let hr = unsafe {
-            (*p).GetHashCode(vt, &mut cl)
-        };
-        SUCCEEDED!(hr, cl, IHashCodeProvider)
-    }
-}
-
-pub trait List where Self: PtrContainer<IList> {
-    fn item<V>(&self, index: i32) -> Result<V>
-        where V: From<*mut VARIANT>
-    {
-        let p = self.ptr_mut();
-        let v: *mut VARIANT = ptr::null_mut();
-        let hr = unsafe {
-            (*p).get_Item(index as c_long, v)
-        };
-        SUCCEEDED!(hr, V::from(v), IList)
-    }
-
-    fn item_mut<V, TOut>(&self, index: i32, value: V) -> Result<()>
-        where V: PtrContainer<TOut> +  From<*mut TOut>, 
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(value:V:TOut);
-        let hr = unsafe {
-            (*p).putref_Item(index, vt)
-        };
-        SUCCEEDED!(hr, (), IList)
-    }
-
-    fn add<V, TOut>(&self, value: V) -> Result<i32>
-        where V: PtrContainer<TOut> +  From<*mut TOut>, 
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(value:V:TOut);
-        let mut ret: c_long = 0;
-        let hr = unsafe {
-            (*p).Add(vt, &mut ret)
-        };
-        SUCCEEDED!(hr, ret, IList)
-    }
-
-    fn contains<V, TOut>(&self, value: V) -> Result<bool>
-        where V: PtrContainer<TOut> +  From<*mut TOut>, 
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(value:V:TOut);
-        let mut vb: VARIANT_BOOL = 0;
-        let hr = unsafe {
-            (*p).Contains(vt, &mut vb)
-        };
-        SUCCEEDED!(hr, vb > 0, IList)
-    }
-
-    fn clear(&self) -> Result<()>{
-        let p = self.ptr_mut();
-        let hr = unsafe {
-            (*p).Clear()
-        };
-        SUCCEEDED!(hr, (), IList)
-    }
-
-    fn read_only(&self) -> Result<bool>{
-        let p = self.ptr_mut();
-        let mut vb: VARIANT_BOOL = 0;
-        let hr = unsafe {
-            (*p).get_IsReadOnly(&mut vb)
-        };
-        SUCCEEDED!(hr, vb > 0, IList)
-    }
-
-    fn fixed_size(&self) -> Result<bool>{
-        let p = self.ptr_mut();
-        let mut vb: VARIANT_BOOL = 0;
-        let hr = unsafe {
-            (*p).get_IsFixedSize(&mut vb)
-        };
-        SUCCEEDED!(hr, vb > 0, IList)
-    }
-
-    fn index<V, TOut>(&self, value: V) -> Result<i32>
-        where V: PtrContainer<TOut> + From<*mut TOut>, 
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(value:V:TOut);
-        let mut cl: c_long = 0;
-        let hr = unsafe {
-            (*p).IndexOf(vt, &mut cl)
-        };
-        SUCCEEDED!(hr, cl, IList)
-    }
-
-    fn insert<V, TOut>(&self, index: i32, value: V) -> Result<()>
-        where V: PtrContainer<TOut> + From<*mut TOut>,
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(value:V:TOut);
-        let hr = unsafe {
-            (*p).Insert(index, vt)
-        };
-        SUCCEEDED!(hr, (), IList)
-    } 
-
-    fn remove<V, TOut>(&self, value: V) -> Result<()>
-        where V: PtrContainer<TOut> + From<*mut TOut>, 
-              TOut: Deref<Target=IDispatch>
-    {
-        let p = self.ptr_mut();
-        let vt = DISPATCH!(value:V:TOut);
-        let hr = unsafe {
-            (*p).Remove(vt)
-        };
-        SUCCEEDED!(hr, (), IList)
-    }
-
-    fn remove_at(&self, index: i32) -> Result<()>{
-        let p = self.ptr_mut();
-        let hr = unsafe {
-            (*p).RemoveAt(index)
-        };
-        SUCCEEDED!(hr, (), IList)
-    }
+    fn into_variant(&self) -> Variant;
 }
 
 //#[incomplete]
@@ -542,68 +100,68 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
 
     fn global_assembly_cache(&self) -> Result<bool> {
         let p = self.ptr_mut();
-        let vb: *mut VARIANT_BOOL = ptr::null_mut();
+        let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
-            (*p).get_GlobalAssemblyCache(vb)
+            (*p).get_GlobalAssemblyCache(&mut vb)
         };
-        SUCCEEDED!(hr, unsafe{*vb} > 0, _Assembly)
+        SUCCEEDED!(hr, vb < 0, _Assembly)
     }
 
-    fn referenced_assemblies<A>(&self) -> Result<DispatchSafeArray<A, _Assembly>> 
+    fn referenced_assemblies<A>(&self) -> Result<RSafeArray> 
         where A: PtrContainer<_Assembly>
     {
         let p = self.ptr_mut();
-        let assemblies: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut passemblies: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetReferencedAssemblies(assemblies)
+            (*p).GetReferencedAssemblies(&mut passemblies)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*assemblies}), _Assembly)
+        SUCCEEDED!(hr, RSafeArray::from(passemblies), _Assembly)
     }
 
     fn module<M>(&self, name: String) -> Result<M> 
         where M:  PtrContainer<_Module>
     {
         let p = self.ptr_mut();
-        let module: *mut *mut _Module = ptr::null_mut();
+        let mut pmodule: *mut _Module = ptr::null_mut();
         let bs: BString = From::from(name);
         let hr = unsafe {
-            (*p).GetModule(bs.as_sys(), module)
+            (*p).GetModule(bs.as_sys(), &mut pmodule)
         };
-        SUCCEEDED!(hr, M::from(unsafe{*module}), _Assembly)
+        SUCCEEDED!(hr, M::from(pmodule), _Assembly)
     }
 
-    fn modules<M>(&self, get_resource_modules: Option<bool>) -> Result<UnknownSafeArray<M, _Module>> 
+    fn modules<M>(&self, get_resource_modules: Option<bool>) -> Result<RSafeArray> 
         where M: PtrContainer<_Module>
     {
         let p = self.ptr_mut();
-        let modules: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut pmodules: *mut SAFEARRAY = ptr::null_mut();
         let hr = match get_resource_modules {
             Some(get) => unsafe {
-                let vb_mod: VARIANT_BOOL = if get {1} else {0};
-                (*p).GetModules_2(vb_mod, modules)
+                let vb_mod: VARIANT_BOOL = if get {-1} else {0};
+                (*p).GetModules_2(vb_mod, &mut pmodules)
             }, 
             None => unsafe {
-                (*p).GetModules(modules)
+                (*p).GetModules(&mut pmodules)
             }
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*modules}), _Assembly)
+        SUCCEEDED!(hr, RSafeArray::from(pmodules), _Assembly)
     }
 
-    fn loaded_modules<M>(&self, get_resource_modules: Option<bool>) -> Result<UnknownSafeArray<M, _Module>> 
+    fn loaded_modules<M>(&self, get_resource_modules: Option<bool>) -> Result<RSafeArray> 
         where M: PtrContainer<_Module> 
     {
         let p = self.ptr_mut();
-        let modules: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut pmodules: *mut SAFEARRAY = ptr::null_mut();
         let hr = match get_resource_modules {
             Some(get) => unsafe {
-                let vb_mod: VARIANT_BOOL = if get {1} else {0};
-                (*p).GetLoadedModules_2(vb_mod, modules)
+                let vb_mod: VARIANT_BOOL = if get {-1} else {0};
+                (*p).GetLoadedModules_2(vb_mod, &mut pmodules)
             }, 
             None => unsafe {
-                (*p).GetLoadedModules(modules)
+                (*p).GetLoadedModules(&mut pmodules)
             }
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*modules}), _Assembly)
+        SUCCEEDED!(hr, RSafeArray::from(pmodules), _Assembly)
     }
     //#[incomplete]
     fn create_instance<V>(&self, _type_name: String, _ignore_case: Option<bool>) -> Result<V> 
@@ -629,50 +187,50 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         unimplemented!();
     }
 
-    fn custom_attributes<T, A>(&self, inherit: bool, attr: Option<T>) -> Result<UnknownSafeArray<A, _Attribute>> 
+    fn custom_attributes<T, A>(&self, inherit: bool, attr: Option<T>) -> Result<RSafeArray> 
         where T: PtrContainer<_Type>, 
               A: PtrContainer<_Attribute>
     {
         let p = self.ptr_mut();
-        let vb_inherit: VARIANT_BOOL = if inherit {1} else {0};
-        let attrs: *mut *mut SAFEARRAY = ptr::null_mut();
+        let vb_inherit: VARIANT_BOOL = if inherit {-1} else {0};
+        let mut pattrs: *mut SAFEARRAY = ptr::null_mut();
         let hr = match attr {
             Some(attr) => unsafe {
                 let t = attr.ptr_mut();
-                (*p).GetCustomAttributes(t, vb_inherit, attrs)
+                (*p).GetCustomAttributes(t, vb_inherit, &mut pattrs)
             }, 
             None => unsafe {
-                (*p).GetCustomAttributes_2(vb_inherit, attrs)
+                (*p).GetCustomAttributes_2(vb_inherit, &mut pattrs)
             }
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*attrs}), _Assembly )
+        SUCCEEDED!(hr, RSafeArray::from(pattrs), _Assembly )
     }
     
-    fn manifest_resource_names(&self) -> Result<StringSafeArray>
+    fn manifest_resource_names(&self) -> Result<RSafeArray>
     {
         let p = self.ptr_mut();
-        let names: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut pnames: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetManifestResourceNames(names)
+            (*p).GetManifestResourceNames(&mut pnames)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*names}), _Assembly )
+        SUCCEEDED!(hr, RSafeArray::from(pnames), _Assembly )
     }
 
-    fn files<F>(&self, resource_modules: Option<bool>) -> Result<DispatchSafeArray<F, _FileStream>> 
+    fn files<F>(&self, resource_modules: Option<bool>) -> Result<RSafeArray> 
         where F: PtrContainer<_FileStream>
     {
         let p = self.ptr_mut();
-        let files: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut pfiles: *mut SAFEARRAY = ptr::null_mut();
         let hr = match resource_modules {
             Some(get_modules) => unsafe {
-                let vb: VARIANT_BOOL = if get_modules {1} else {0};
-                (*p).GetFiles_2(vb, files)
+                let vb: VARIANT_BOOL = if get_modules {-1} else {0};
+                (*p).GetFiles_2(vb, &mut pfiles)
             }, 
             None => unsafe {
-                (*p).GetFiles(files)
+                (*p).GetFiles(&mut pfiles)
             }
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*files}), _Assembly)
+        SUCCEEDED!(hr, RSafeArray::from(pfiles), _Assembly)
     }
 
     fn to_str(&self) -> Result<String>{
@@ -685,16 +243,15 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
     }
 
     fn equals<V, TOut>(&self, value: V) -> Result<bool>
-        where V: PtrContainer<TOut>, 
-              TOut: Deref<Target=IUnknown>
+        where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt = UNKNOWN!(value:V:TOut);
+        let vt = VARIANT::from(value.into_variant());
         let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).Equals(vt, &mut vb)
         };
-        SUCCEEDED!(hr, vb > 0, _Assembly)
+        SUCCEEDED!(hr, vb < 0, _Assembly)
     }
 
     fn hashcode(&self) -> Result<i32>{
@@ -752,7 +309,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let p = self.ptr_mut();
         let an: *mut *mut _AssemblyName = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetName_2(if use_code_base_after_shadow_copy  {1} else {0} as VARIANT_BOOL, an)
+            (*p).GetName_2(if use_code_base_after_shadow_copy  {-1} else {0} as VARIANT_BOOL, an)
         };
         SUCCEEDED!(hr, A::from(unsafe {*an}), _Assembly)
     }
@@ -796,31 +353,31 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let bs: BString = From::from(name);
         let t: *mut *mut _Type = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetType_3(bs.as_sys(), if throw_on_error {1} else {0} as VARIANT_BOOL, t)
+            (*p).GetType_3(bs.as_sys(), if throw_on_error {-1} else {0} as VARIANT_BOOL, t)
         };
         SUCCEEDED!(hr, T::from(unsafe {*t}),  _Assembly)
     }
     
-    fn exported_types<S>(&self) -> Result<UnknownSafeArray<S, _Type>> 
+    fn exported_types<S>(&self) -> Result<RSafeArray> 
         where S: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
-        let sa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetExportedTypes(sa)
+            (*p).GetExportedTypes(&mut psa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*sa}) , _Assembly)
+        SUCCEEDED!(hr, RSafeArray::from(psa) , _Assembly)
     }
 
-    fn types<S>(&self) -> Result<UnknownSafeArray<S, _Type>> 
+    fn types<S>(&self) -> Result<RSafeArray> 
         where S: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
-        let sa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetTypes(sa)
+            (*p).GetTypes(&mut psa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*sa}), _Assembly)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _Assembly)
     }
 
     fn manifest_resource_stream<T, S>(&self, t: T, name: String) -> Result<S> 
@@ -830,11 +387,11 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let p = self.ptr_mut();
         let t = t.ptr_mut();
         let bs: BString = From::from(name);
-        let s: *mut *mut _Stream = ptr::null_mut();
+        let mut s: *mut _Stream = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetManifestResourceStream(t, bs.as_sys(), s)
+            (*p).GetManifestResourceStream(t, bs.as_sys(), &mut s)
         };
-        SUCCEEDED!(hr, S::from(unsafe{*s}), _Assembly)
+        SUCCEEDED!(hr, S::from(s), _Assembly)
     }
 
     fn manifest_resource_stream_2<S>(&self, name: String) -> Result<S> 
@@ -898,12 +455,12 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
     {
         let p = self.ptr_mut();
         let t = attr_type.ptr_mut();
-        let vb_inherit: VARIANT_BOOL = if inherit {1}  else {0};
+        let vb_inherit: VARIANT_BOOL = if inherit {-1}  else {0};
         let mut vb_ret: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).IsDefined(t, vb_inherit, &mut vb_ret)
         };
-        SUCCEEDED!(hr, vb_ret > 0, _Assembly )
+        SUCCEEDED!(hr, vb_ret < 0, _Assembly )
     }
 
     fn type_4<T>(&self, name: String, throw_on_error: bool, ignore_case: bool) -> Result<T> 
@@ -911,13 +468,13 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
     {
         let p = self.ptr_mut();
         let bs: BString = From::from(name);
-        let vb_throw: VARIANT_BOOL = if throw_on_error {1} else {0};
-        let vb_ignore: VARIANT_BOOL = if ignore_case {1} else {0};
-        let t: *mut *mut _Type = ptr::null_mut();
+        let vb_throw: VARIANT_BOOL = if throw_on_error {-1} else {0};
+        let vb_ignore: VARIANT_BOOL = if ignore_case {-1} else {0};
+        let mut t: *mut _Type = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetType_4(bs.as_sys(), vb_throw, vb_ignore, t)
+            (*p).GetType_4(bs.as_sys(), vb_throw, vb_ignore, &mut t)
         };
-        SUCCEEDED!(hr, T::from(unsafe {*t}), _Assembly)
+        SUCCEEDED!(hr, T::from(t), _Assembly)
     }
 
     fn satellite_assembly<A, C, V>(&self, culture: C, version: Option<V>) -> Result<A> 
@@ -961,15 +518,15 @@ pub trait Type where Self: PtrContainer<_Type> {
         unimplemented!()
     }
 
-    fn properties<PI>(&self, binding_attrs: BindingFlags) -> Result<UnknownSafeArray<PI, _PropertyInfo>> 
+    fn properties<PI>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
         where PI: PtrContainer<_PropertyInfo> 
     {
         let p = self.ptr_mut();
-        let psa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetProperties(binding_attrs, psa)
+            (*p).GetProperties(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe{*psa}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
     }
 
     fn property<P>(&self, name: String, binding_attrs: BindingFlags) -> Result<P>
@@ -977,44 +534,44 @@ pub trait Type where Self: PtrContainer<_Type> {
     {
         let p = self.ptr_mut();
         let bs: BString = From::from(name);
-        let pppi: *mut *mut _PropertyInfo = ptr::null_mut();
+        let mut ppi: *mut _PropertyInfo = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetProperty(bs.as_sys(), binding_attrs, pppi)
+            (*p).GetProperty(bs.as_sys(), binding_attrs, &mut ppi)
         };
-        SUCCEEDED!(hr, P::from(unsafe{*pppi}), _Type)
+        SUCCEEDED!(hr, P::from(ppi), _Type)
     }
 
-    fn fields<F>(&self, binding_attrs: BindingFlags) -> Result<UnknownSafeArray<F, _FieldInfo>> 
+    fn fields<F>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
         where F: PtrContainer<_FieldInfo> 
     {
         let p = self.ptr_mut();
-        let ppsa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetFields(binding_attrs, ppsa)
+            (*p).GetFields(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*ppsa}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
     }
 
-    fn field<F>(&self, binding_attrs: BindingFlags) -> Result<UnknownSafeArray<F, _FieldInfo>> 
+    fn field<F>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
         where F: PtrContainer<_FieldInfo> 
     {
         let p = self.ptr_mut();
-        let ppsa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetField(binding_attrs, ppsa)
+            (*p).GetField(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*ppsa}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
     }
 
-    fn methods<M>(&self, binding_attrs: BindingFlags) -> Result<UnknownSafeArray<M, _MethodInfo>> 
+    fn methods<M>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
         where M: PtrContainer<_MethodInfo>
     {
         let p = self.ptr_mut();
-        let ppsa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetMethods(binding_attrs, ppsa)
+            (*p).GetMethods(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*ppsa}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
     }
 
     //still need to implement GetMethod with binder, types, and modifiers
@@ -1030,34 +587,29 @@ pub trait Type where Self: PtrContainer<_Type> {
         };
         SUCCEEDED!(hr, M::from(unsafe{*ppm}), _Type)
     }
-    fn interface_map<T, P, P2, M>(&self, interface_type: T) -> Result<WrappedInterfaceMapping<P, P2, M>>
+    fn interface_map<T, P, P2, M>(&self, interface_type: T) -> Result<WrappedInterfaceMapping<P, P2>>
         where T: PtrContainer<_Type>, 
               P: PtrContainer<_Type>, 
-              P2: PtrContainer<_Type>, 
-              M: PtrContainer<_MethodInfo>
+              P2: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
         let t = interface_type.ptr_mut();
-        let ppim: *mut *mut InterfaceMapping = ptr::null_mut();
+        let mut pim: *mut InterfaceMapping = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetInterfaceMap(t, ppim)
+            (*p).GetInterfaceMap(t, &mut pim)
         };
-        SUCCEEDED!(hr, WrappedInterfaceMapping::from(unsafe{**ppim}), _Type)
+        SUCCEEDED!(hr, WrappedInterfaceMapping::from(unsafe{*pim}), _Type)
     }
 
-    fn instance_of_type<VD, VU, TDispatch, TUnknown>(&self, variant: Variant<VD, VU, TDispatch, TUnknown, i16>) -> Result<bool> 
-        where VD: PtrContainer<TDispatch>, 
-              TDispatch: Deref<Target=IDispatch>, 
-              VU: PtrContainer<TUnknown>, 
-              TUnknown: Deref<Target=IUnknown> 
+    fn instance_of_type(&self, variant: Variant) -> Result<bool> 
     {
         let p = self.ptr_mut();
         let v = VARIANT::from(variant);
-        let vb: *mut VARIANT_BOOL = ptr::null_mut();
+        let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
-            (*p).IsInstanceOfType(v, vb)
+            (*p).IsInstanceOfType(v, &mut vb)
         };
-        SUCCEEDED!(hr, unsafe{*vb} > 0, _Type)        
+        SUCCEEDED!(hr, vb < 0, _Type)        
     }
 
     fn assignable_from<T>(&self, test_type: T) -> Result<bool> 
@@ -1065,11 +617,11 @@ pub trait Type where Self: PtrContainer<_Type> {
     {
         let p = self.ptr_mut();
         let t = test_type.ptr_mut();
-        let vb: *mut VARIANT_BOOL = ptr::null_mut();
+        let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
-            (*p).IsAssignableFrom(t, vb)
+            (*p).IsAssignableFrom(t, &mut vb)
         };
-        SUCCEEDED!(hr, unsafe{*vb} > 0, _Type)        
+        SUCCEEDED!(hr, vb < 0, _Type)        
     }
 
     fn subclass_of<T>(&self, test_type: T) -> Result<bool> 
@@ -1077,11 +629,11 @@ pub trait Type where Self: PtrContainer<_Type> {
     {
         let p = self.ptr_mut();
         let t = test_type.ptr_mut();
-        let vb: *mut VARIANT_BOOL = ptr::null_mut();
+        let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
-            (*p).IsSubclassOf(t, vb)
+            (*p).IsSubclassOf(t, &mut vb)
         };
-        SUCCEEDED!(hr, unsafe{*vb} > 0, _Type)        
+        SUCCEEDED!(hr, vb < 0, _Type)        
     }
 
     //#[incomplete]
@@ -1090,7 +642,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         unimplemented!()
     }
 
-    fn default_members<M>(&self) -> Result<UnknownSafeArray<M, _MemberInfo>>
+    fn default_members<M>(&self) -> Result<RSafeArray>
         where M: PtrContainer<_MemberInfo>
     {
         let p = self.ptr_mut();
@@ -1098,7 +650,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetDefaultMembers(ppm)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe{*ppm}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(unsafe{*ppm}), _Type)
     }
 
     //#[incomplete]
@@ -1106,7 +658,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         unimplemented!()
     }
 
-    fn members<M>(&self, binding_attr: BindingFlags) -> Result<UnknownSafeArray<M, _MemberInfo>> 
+    fn members<M>(&self, binding_attr: BindingFlags) -> Result<RSafeArray> 
         where M: PtrContainer<_MemberInfo>
     {
         let p = self.ptr_mut();
@@ -1114,24 +666,24 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetMembers(binding_attr, ppsa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*ppsa}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(unsafe {*ppsa}), _Type)
     }
 
-    fn member<M>(&self, name: String, member_types: Option<MemberTypes>, binding_flags: BindingFlags) -> Result<UnknownSafeArray<M, _MemberInfo>>
+    fn member<M>(&self, name: String, member_types: Option<MemberTypes>, binding_flags: BindingFlags) -> Result<RSafeArray>
         where M: PtrContainer<_MemberInfo>
     {
         let p = self.ptr_mut();
         let bs: BString = From::from(name);
-        let ppm: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut ppm: *mut SAFEARRAY = ptr::null_mut();
         let hr = match member_types {
             Some(member_types) => unsafe {
-                (*p).GetMember(bs.as_sys(), member_types, binding_flags, ppm)
+                (*p).GetMember(bs.as_sys(), member_types, binding_flags, &mut ppm)
             }, 
             None => unsafe {
-                (*p).GetMember_2(bs.as_sys(), binding_flags, ppm)
+                (*p).GetMember_2(bs.as_sys(), binding_flags, &mut ppm)
             }
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe{*ppm}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(ppm), _Type)
     }
 
     fn nested_type<T>(&self, name: String, binding_flags: BindingFlags) -> Result<T> 
@@ -1139,39 +691,39 @@ pub trait Type where Self: PtrContainer<_Type> {
     {
         let p = self.ptr_mut();
         let bs: BString = From::from(name);
-        let ppt: *mut *mut _Type = ptr::null_mut();
+        let mut ppt: *mut _Type = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetNestedType(bs.as_sys(), binding_flags, ppt)
+            (*p).GetNestedType(bs.as_sys(), binding_flags, &mut ppt)
         };
-        SUCCEEDED!(hr, T::from(unsafe {*ppt}), _Type)
+        SUCCEEDED!(hr, T::from(ppt), _Type)
     }
 
-    fn nested_types<T>(&self, binding_flags: BindingFlags) -> Result<UnknownSafeArray<T, _Type>> 
+    fn nested_types<T>(&self, binding_flags: BindingFlags) -> Result<RSafeArray> 
         where T: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
-        let psa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetNestedTypes(binding_flags, psa)
+            (*p).GetNestedTypes(binding_flags, &mut psa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*psa}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
     }
 
-    fn events<E>(&self, binding_flags: Option<BindingFlags>) -> Result<UnknownSafeArray<E, _EventInfo>> 
+    fn events<E>(&self, binding_flags: Option<BindingFlags>) -> Result<RSafeArray> 
         where E: PtrContainer<_EventInfo>
     {
         let p = self.ptr_mut();
-        let e: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut e: *mut SAFEARRAY = ptr::null_mut();
 
         let hr = match binding_flags {
             Some(flags) => unsafe {
-                (*p).GetEvents_2(flags, e)
+                (*p).GetEvents_2(flags, &mut e)
             }, 
             None => unsafe {
-                (*p).GetEvents(e)
+                (*p).GetEvents(&mut e)
             }
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe{*e}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(e), _Type)
     }
 
     fn event<E>(&self, name: String, flags: BindingFlags) -> Result<E>
@@ -1179,30 +731,30 @@ pub trait Type where Self: PtrContainer<_Type> {
     {
         let p = self.ptr_mut();
         let bs: BString = From::from(name);
-        let e: *mut *mut _EventInfo = ptr::null_mut();
+        let mut e: *mut _EventInfo = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetEvent(bs.as_sys(), flags, e)
+            (*p).GetEvent(bs.as_sys(), flags, &mut e)
         };
-        SUCCEEDED!(hr, E::from(unsafe {*e}), _Type)
+        SUCCEEDED!(hr, E::from(e), _Type)
     }
 
     //#[incomplete]
-    fn find_interfaces<TF, T, V, E>(&self, _filter: TF, _criteria: V) -> Result<UnknownSafeArray<T, _Type>> 
+    fn find_interfaces<TF, T, V, E>(&self, _filter: TF, _criteria: V) -> Result<RSafeArray> 
         where TF: PtrContainer<_TypeFilter>,
               T: PtrContainer<_Type>,
               V: PtrContainer<E>
     {
         unimplemented!();
     }
-    fn interfaces<T>(&self) -> Result<UnknownSafeArray<T, _Type>> 
+    fn interfaces<T>(&self) -> Result<RSafeArray> 
         where T: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
-        let psa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetInterfaces(psa)
+            (*p).GetInterfaces(&mut psa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*psa}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
     }
 
     fn interface<T>(&self, name: String, ignore_case: bool) -> Result<T> 
@@ -1210,55 +762,55 @@ pub trait Type where Self: PtrContainer<_Type> {
     {
         let p = self.ptr_mut();
         let bs: BString = From::from(name);
-        let t: *mut *mut _Type = ptr::null_mut();
-        let vb: VARIANT_BOOL = if ignore_case{1} else{0};
+        let mut t: *mut _Type = ptr::null_mut();
+        let vb: VARIANT_BOOL = if ignore_case{-1} else{0};
         let hr = unsafe {
-            (*p).GetInterface(bs.as_sys(), vb, t)
+            (*p).GetInterface(bs.as_sys(), vb, &mut t)
         };
-        SUCCEEDED!(hr, T::from(unsafe{*t}), _Type)
+        SUCCEEDED!(hr, T::from(t), _Type)
     }
 
-    fn constructors<C>(&self, binding_attrs: BindingFlags) -> Result<UnknownSafeArray<C, _ConstructorInfo>> 
+    fn constructors<C>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
         where C: PtrContainer<_ConstructorInfo>
     {
         let p = self.ptr_mut();
-        let psa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetConstructors(binding_attrs, psa)
+            (*p).GetConstructors(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe{*psa}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
     }
 
     fn defined<T>(&self, attr_type: T, inherit: bool) -> Result<bool>
         where T: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
-        let vb: VARIANT_BOOL = if inherit{1} else {0};
+        let vb: VARIANT_BOOL = if inherit{-1} else {0};
         let attr = attr_type.ptr_mut();
-        let ret: *mut VARIANT_BOOL = ptr::null_mut();
+        let mut ret: VARIANT_BOOL = 0;
         let hr = unsafe {
-            (*p).IsDefined(attr, vb, ret)
+            (*p).IsDefined(attr, vb, &mut ret)
         };
-        SUCCEEDED!(hr, unsafe{*ret} > 0, _Type)
+        SUCCEEDED!(hr, ret < 0, _Type)
     }
 
-    fn custom_attributes<T, A>(&self, inherit: bool, attr_type: Option<T>) -> Result<UnknownSafeArray<A, _Attribute>>
+    fn custom_attributes<T, A>(&self, inherit: bool, attr_type: Option<T>) -> Result<RSafeArray>
         where A: PtrContainer<_Attribute>, 
               T: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
-        let vb: VARIANT_BOOL = if inherit {1} else {0};
-        let psa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let vb: VARIANT_BOOL = if inherit {-1} else {0};
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = match attr_type {
             Some(attr) => unsafe {
                 let t = attr.ptr_mut();
-                (*p).GetCustomAttributes(t, vb, psa)
+                (*p).GetCustomAttributes(t, vb, &mut psa)
             },
             None => unsafe {
-                (*p).GetCustomAttributes_2(vb, psa)
+                (*p).GetCustomAttributes_2(vb, &mut psa)
             }
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*psa}), _Type)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
     }
 
     PROPERTY!{get_DeclaringType _Type { get { declaring_type(_Type) }}}
@@ -1327,16 +879,15 @@ pub trait Type where Self: PtrContainer<_Type> {
     }
 
     fn equals<V, TOut>(&self, value: V) -> Result<bool>
-        where V: PtrContainer<TOut>, 
-              TOut: Deref<Target=IUnknown>
+        where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt = UNKNOWN!(value:V:TOut);
+        let vt = VARIANT::from(value.into_variant());
         let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).Equals(vt, &mut vb)
         };
-        SUCCEEDED!(hr, vb > 0, _Type)
+        SUCCEEDED!(hr, vb < 0, _Type)
     }
 
     fn equals_2<T>(&self, obj: T) -> Result<bool> 
@@ -1348,7 +899,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).Equals_2(t, &mut vb)
         };
-        SUCCEEDED!(hr, vb > 0, _Type)
+        SUCCEEDED!(hr, vb < 0, _Type)
     }
 
     fn hashcode(&self) -> Result<i32>{
@@ -1439,16 +990,15 @@ pub trait MemberInfo where Self: PtrContainer<_MemberInfo> {
     }
 
     fn equals<V, TOut>(&self, value: V) -> Result<bool>
-        where V: PtrContainer<TOut>, 
-              TOut: Deref<Target=IUnknown>
+        where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt = UNKNOWN!(value:V:TOut);
+        let vt = VARIANT::from(value.into_variant());
         let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).Equals(vt, &mut vb)
         };
-        SUCCEEDED!(hr, vb > 0, _MemberInfo)
+        SUCCEEDED!(hr, vb < 0, _MemberInfo)
     }
 
     fn hashcode(&self) -> Result<i32>{
@@ -1484,35 +1034,35 @@ pub trait MemberInfo where Self: PtrContainer<_MemberInfo> {
     PROPERTY!{get_DeclaringType _MemberInfo { get {declaring_type(_Type)}}}
     PROPERTY!{get_ReflectedType _MemberInfo { get {reflected_type(_Type)}}}
     
-    fn custom_attributes<T>(&self, inherit: bool, attr_type: Option<T>) -> Result<UnknownSafeArray<T, _Type>>
+    fn custom_attributes<T>(&self, inherit: bool, attr_type: Option<T>) -> Result<RSafeArray>
         where T: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
-        let ppsa: *mut *mut SAFEARRAY = ptr::null_mut();
-        let vb: VARIANT_BOOL = if inherit {1} else {0};
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
+        let vb: VARIANT_BOOL = if inherit {-1} else {0};
         let hr = match attr_type {
             Some(attr_type) => unsafe {
                 let t = attr_type.ptr_mut();
-                (*p).GetCustomAttributes(t, vb, ppsa)
+                (*p).GetCustomAttributes(t, vb, &mut psa)
             }, 
             None => unsafe {
-                (*p).GetCustomAttributes_2(vb, ppsa)
+                (*p).GetCustomAttributes_2(vb, &mut psa)
             }
         };
-        SUCCEEDED!(hr, SafeArray::from(unsafe {*ppsa}), _MemberInfo)
+        SUCCEEDED!(hr, RSafeArray::from(psa), _MemberInfo)
     }
 
     fn is_defined<T>(&self, attr_type: T, inherit: bool) -> Result<bool> 
         where T: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
-        let vb: VARIANT_BOOL = if inherit {1} else {0};
-        let ret: *mut VARIANT_BOOL = ptr::null_mut();
+        let vb: VARIANT_BOOL = if inherit {-1} else {0};
+        let mut ret: VARIANT_BOOL = 0;
         let t = attr_type.ptr_mut();
         let hr = unsafe {
-            (*p).IsDefined(t, vb, ret)
+            (*p).IsDefined(t, vb, &mut ret)
         };
-        SUCCEEDED!(hr, unsafe{*ret} > 0, _MemberInfo)
+        SUCCEEDED!(hr, ret < 0, _MemberInfo)
     }
 }
 //#[incomplete]
@@ -1651,39 +1201,12 @@ impl PtrContainer<_Type> for ClrType {
     fn from(pt: *mut _Type) -> ClrType {
         ClrType{ ptr: pt}
     }
-}
-
-macro_rules! BLANKET_IMPLS {
-    ($({$tr:ty, $ptr_ty:ty},)*) => {
-        $(
-            impl<T:PtrContainer<$ptr_ty>> $tr for T{}
-        )*
-    };
-}
-
-BLANKET_IMPLS!{
-    {Collection, ICollection},
-    {Comparable, IComparable},
-    {Comparer, IComparer},
-    {Dictionary, IDictionary},
-    {DictionaryEnumerator, IDictionaryEnumerator},
-    {Enumerable, IEnumerable}, 
-    {Enumerator, IEnumerator},
-    {EqualityComparer, IEqualityComparer}, 
-    {HashCodeProvider, IHashCodeProvider}, 
-    {List, IList}, 
-    {Assembly, _Assembly}, 
-    {Type, _Type}, 
-    {MemberInfo, _MemberInfo}, 
-    {MethodBase, _MethodBase}, 
-    {ConstructorInfo, _ConstructorInfo}, 
-    {FieldInfo, _FieldInfo}, 
-    {PropertyInfo, _PropertyInfo}, 
-    {EventInfo, _EventInfo}, 
-    {ParameterInfo, _ParameterInfo}, 
-    {Module, _Module}, 
-    {AssemblyName, _AssemblyName},
-    {Binder, _Binder},
+     
+    fn into_variant(&self) -> Variant {
+        let p = self.ptr_mut();
+        let p: *mut IUnknown = unsafe {mem::transmute::<*mut _Type, *mut IUnknown>(p)};
+        Variant::from(p)
+    }
 }
 
 impl Display for ClrType {
@@ -1692,6 +1215,3 @@ impl Display for ClrType {
         write!(f, "{:?}", s)
     }
 }
-
-
-
