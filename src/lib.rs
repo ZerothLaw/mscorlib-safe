@@ -16,7 +16,8 @@ mod struct_wrappers;
 #[macro_use]mod variant;
 mod wrappers;
 
-mod new_variant;
+pub mod new_variant;
+pub mod new_safearray;
 
 pub use bstring::*;
 pub use primitives::*;
@@ -24,3 +25,4 @@ pub use result::*;
 pub use safearray::*;
 pub use variant::*;
 pub use wrappers::*;
+
