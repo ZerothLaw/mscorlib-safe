@@ -74,3 +74,36 @@ macro_rules! PROPERTY {
         }
     };
 }
+
+#[macro_export]
+macro_rules! EXTRACT_VECTOR_FROM_SAFEARRAY {
+    ($enum_name:ident, $psa_name:ident, $origin_type:ty, $transmuted_type:ty, $ctr_type:ident) => {
+        {
+            let rsa: RSafeArray<$ctr_type> = RSafeArray::from($psa_name);
+            if let RSafeArray::$enum_name(array, _) = rsa {
+                array.into_iter().map(|item| {
+                    let trans_item = unsafe { mem::transmute::<$origin_type, $transmuted_type>(item)};
+                    $ctr_type::from(trans_item)
+                }).collect()
+            }
+            else {
+                Vec::new()
+            }
+        }
+        
+    };
+}
+
+#[macro_export]
+macro_rules! SIMPLE_EXTRACT {
+    ($enum_name:ident, $psa_name:ident, $ptr_type:ty) => {
+        {
+            let rsa: RSafeArray<$ptr_type> = RSafeArray::from($psa_name);
+            if let RSafeArray::$enum_name(inner) = rsa {
+                inner
+            } else {
+                Vec::new()
+            }
+        }
+    };
+}

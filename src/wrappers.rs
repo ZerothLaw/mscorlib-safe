@@ -25,6 +25,7 @@ use winapi::shared::ntdef::LOCALE_NEUTRAL;
 use winapi::shared::wtypes::BSTR;
 use winapi::shared::wtypes::VARIANT_BOOL;
 
+use winapi::um::oaidl::IDispatch;
 use winapi::um::oaidl::ITypeInfo;
 use winapi::um::oaidl::VARIANT;
 use winapi::um::oaidl::SAFEARRAY;
@@ -41,6 +42,7 @@ use mscorlib_sys::system::security::policy::_Evidence;
 
 
 use bstring::{BString};
+
 use new_safearray::RSafeArray;
 use new_variant::Variant;
 use result::{ClrError, SourceLocation, Result};
@@ -107,7 +109,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         SUCCEEDED!(hr, vb < 0, _Assembly)
     }
 
-    fn referenced_assemblies<A>(&self) -> Result<RSafeArray> 
+    fn referenced_assemblies<A>(&self) -> Result<Vec<A>> 
         where A: PtrContainer<_Assembly>
     {
         let p = self.ptr_mut();
@@ -115,7 +117,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let hr = unsafe {
             (*p).GetReferencedAssemblies(&mut passemblies)
         };
-        SUCCEEDED!(hr, RSafeArray::from(passemblies), _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Dispatch, passemblies, *mut IDispatch, *mut _Assembly, A}, _Assembly)
     }
 
     fn module<M>(&self, name: String) -> Result<M> 
@@ -130,7 +132,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         SUCCEEDED!(hr, M::from(pmodule), _Assembly)
     }
 
-    fn modules<M>(&self, get_resource_modules: Option<bool>) -> Result<RSafeArray> 
+    fn modules<M>(&self, get_resource_modules: Option<bool>) -> Result<Vec<M>> 
         where M: PtrContainer<_Module>
     {
         let p = self.ptr_mut();
@@ -144,10 +146,10 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
                 (*p).GetModules(&mut pmodules)
             }
         };
-        SUCCEEDED!(hr, RSafeArray::from(pmodules), _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pmodules, *mut IUnknown, *mut _Module, M}, _Assembly)
     }
 
-    fn loaded_modules<M>(&self, get_resource_modules: Option<bool>) -> Result<RSafeArray> 
+    fn loaded_modules<M>(&self, get_resource_modules: Option<bool>) -> Result<Vec<M>> 
         where M: PtrContainer<_Module> 
     {
         let p = self.ptr_mut();
@@ -161,7 +163,8 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
                 (*p).GetLoadedModules(&mut pmodules)
             }
         };
-        SUCCEEDED!(hr, RSafeArray::from(pmodules), _Assembly)
+        
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pmodules, *mut IUnknown, *mut _Module, M}, _Assembly)
     }
     //#[incomplete]
     fn create_instance<V>(&self, _type_name: String, _ignore_case: Option<bool>) -> Result<V> 
@@ -187,7 +190,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         unimplemented!();
     }
 
-    fn custom_attributes<T, A>(&self, inherit: bool, attr: Option<T>) -> Result<RSafeArray> 
+    fn custom_attributes<T, A>(&self, inherit: bool, attr: Option<T>) -> Result<Vec<A>> 
         where T: PtrContainer<_Type>, 
               A: PtrContainer<_Attribute>
     {
@@ -203,20 +206,20 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
                 (*p).GetCustomAttributes_2(vb_inherit, &mut pattrs)
             }
         };
-        SUCCEEDED!(hr, RSafeArray::from(pattrs), _Assembly )
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pattrs, *mut IUnknown, *mut _Attribute, A}, _Assembly )
     }
     
-    fn manifest_resource_names(&self) -> Result<RSafeArray>
+    fn manifest_resource_names(&self) -> Result<Vec<String>>
     {
         let p = self.ptr_mut();
         let mut pnames: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
             (*p).GetManifestResourceNames(&mut pnames)
         };
-        SUCCEEDED!(hr, RSafeArray::from(pnames), _Assembly )
+        SUCCEEDED!(hr, SIMPLE_EXTRACT!{BString, pnames, BString}, _Assembly )
     }
 
-    fn files<F>(&self, resource_modules: Option<bool>) -> Result<RSafeArray> 
+    fn files<F>(&self, resource_modules: Option<bool>) -> Result<Vec<F>> 
         where F: PtrContainer<_FileStream>
     {
         let p = self.ptr_mut();
@@ -230,7 +233,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
                 (*p).GetFiles(&mut pfiles)
             }
         };
-        SUCCEEDED!(hr, RSafeArray::from(pfiles), _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pfiles, *mut IUnknown, *mut _FileStream, F}, _Assembly)
     }
 
     fn to_str(&self) -> Result<String>{
@@ -296,22 +299,22 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         where A: PtrContainer<_AssemblyName>
     {
         let p = self.ptr_mut();
-        let an: *mut *mut _AssemblyName = ptr::null_mut();
+        let mut an: *mut _AssemblyName = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetName(an)
+            (*p).GetName(&mut an)
         };
-        SUCCEEDED!(hr, A::from(unsafe {*an}), _Assembly)
+        SUCCEEDED!(hr, A::from(an), _Assembly)
     }
 
     fn name_2<A>(&self, use_code_base_after_shadow_copy: bool) -> Result<A>
         where A: PtrContainer<_AssemblyName>
     {
         let p = self.ptr_mut();
-        let an: *mut *mut _AssemblyName = ptr::null_mut();
+        let mut an: *mut _AssemblyName = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetName_2(if use_code_base_after_shadow_copy  {-1} else {0} as VARIANT_BOOL, an)
+            (*p).GetName_2(if use_code_base_after_shadow_copy  {-1} else {0} as VARIANT_BOOL, &mut an)
         };
-        SUCCEEDED!(hr, A::from(unsafe {*an}), _Assembly)
+        SUCCEEDED!(hr, A::from(an), _Assembly)
     }
 
     fn full_name(&self) -> Result<String>{
@@ -327,11 +330,11 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         where M: PtrContainer<_MethodInfo>
     {
         let p = self.ptr_mut();
-        let mi: *mut *mut _MethodInfo = ptr::null_mut();
+        let mut mi: *mut _MethodInfo = ptr::null_mut();
         let hr = unsafe {
-            (*p).get_EntryPoint(mi)
+            (*p).get_EntryPoint(&mut mi)
         };
-        SUCCEEDED!(hr, M::from(unsafe {*mi}),  _Assembly)
+        SUCCEEDED!(hr, M::from(mi),  _Assembly)
     }
 
     fn type_2<T>(&self, name: &'static str) -> Result<T> 
@@ -358,7 +361,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         SUCCEEDED!(hr, T::from(unsafe {*t}),  _Assembly)
     }
     
-    fn exported_types<S>(&self) -> Result<RSafeArray> 
+    fn exported_types<S>(&self) -> Result<Vec<S>> 
         where S: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
@@ -366,10 +369,10 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let hr = unsafe {
             (*p).GetExportedTypes(&mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa) , _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Type, S} , _Assembly)
     }
 
-    fn types<S>(&self) -> Result<RSafeArray> 
+    fn types<S>(&self) -> Result<Vec<S>> 
         where S: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
@@ -377,7 +380,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let hr = unsafe {
             (*p).GetTypes(&mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Type, S}, _Assembly)
     }
 
     fn manifest_resource_stream<T, S>(&self, t: T, name: String) -> Result<S> 
@@ -399,11 +402,11 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
     {
         let p = self.ptr_mut();
         let bs: BString = From::from(name);
-        let s: *mut *mut _Stream = ptr::null_mut();
+        let mut s: *mut _Stream = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetManifestResourceStream_2(bs.as_sys(), s)
+            (*p).GetManifestResourceStream_2(bs.as_sys(), &mut s)
         };
-        SUCCEEDED!(hr, S::from(unsafe {*s}), _Assembly)
+        SUCCEEDED!(hr, S::from(s), _Assembly)
     }
 
     fn file<F>(&self, name: String) -> Result<F> 
@@ -411,11 +414,11 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
     {
         let p = self.ptr_mut();
         let bs: BString = From::from(name);
-        let f: *mut *mut _FileStream = ptr::null_mut();
+        let mut f: *mut _FileStream = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetFile(bs.as_sys(), f)
+            (*p).GetFile(bs.as_sys(), &mut f)
         };
-        SUCCEEDED!(hr, F::from(unsafe {*f}), _Assembly)
+        SUCCEEDED!(hr, F::from(f), _Assembly)
     }
 
     fn manifest_resource_info<I>(&self, name: String) -> Result<I> 
@@ -518,7 +521,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         unimplemented!()
     }
 
-    fn properties<PI>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
+    fn properties<PI>(&self, binding_attrs: BindingFlags) -> Result<Vec<PI>> 
         where PI: PtrContainer<_PropertyInfo> 
     {
         let p = self.ptr_mut();
@@ -526,7 +529,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetProperties(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _PropertyInfo, PI}, _Type)
     }
 
     fn property<P>(&self, name: String, binding_attrs: BindingFlags) -> Result<P>
@@ -541,7 +544,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, P::from(ppi), _Type)
     }
 
-    fn fields<F>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
+    fn fields<F>(&self, binding_attrs: BindingFlags) -> Result<Vec<F>> 
         where F: PtrContainer<_FieldInfo> 
     {
         let p = self.ptr_mut();
@@ -549,10 +552,10 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetFields(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _FieldInfo, F}, _Type)
     }
 
-    fn field<F>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
+    fn field<F>(&self, binding_attrs: BindingFlags) -> Result<Vec<F>> 
         where F: PtrContainer<_FieldInfo> 
     {
         let p = self.ptr_mut();
@@ -560,10 +563,10 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetField(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _FieldInfo, F}, _Type)
     }
 
-    fn methods<M>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
+    fn methods<M>(&self, binding_attrs: BindingFlags) -> Result<Vec<M>> 
         where M: PtrContainer<_MethodInfo>
     {
         let p = self.ptr_mut();
@@ -571,7 +574,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetMethods(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _MethodInfo, M}, _Type)
     }
 
     //still need to implement GetMethod with binder, types, and modifiers
@@ -587,10 +590,11 @@ pub trait Type where Self: PtrContainer<_Type> {
         };
         SUCCEEDED!(hr, M::from(unsafe{*ppm}), _Type)
     }
-    fn interface_map<T, P, P2, M>(&self, interface_type: T) -> Result<WrappedInterfaceMapping<P, P2>>
+    fn interface_map<T, P, P2, M>(&self, interface_type: T) -> Result<WrappedInterfaceMapping<P, P2, M>>
         where T: PtrContainer<_Type>, 
               P: PtrContainer<_Type>, 
-              P2: PtrContainer<_Type>
+              P2: PtrContainer<_Type>, 
+              M: PtrContainer<_MethodInfo>
     {
         let p = self.ptr_mut();
         let t = interface_type.ptr_mut();
@@ -642,15 +646,15 @@ pub trait Type where Self: PtrContainer<_Type> {
         unimplemented!()
     }
 
-    fn default_members<M>(&self) -> Result<RSafeArray>
+    fn default_members<M>(&self) -> Result<Vec<M>>
         where M: PtrContainer<_MemberInfo>
     {
         let p = self.ptr_mut();
-        let ppm: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut pm: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetDefaultMembers(ppm)
+            (*p).GetDefaultMembers(&mut pm)
         };
-        SUCCEEDED!(hr, RSafeArray::from(unsafe{*ppm}), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pm, *mut IUnknown, *mut _MemberInfo, M}, _Type)
     }
 
     //#[incomplete]
@@ -658,18 +662,18 @@ pub trait Type where Self: PtrContainer<_Type> {
         unimplemented!()
     }
 
-    fn members<M>(&self, binding_attr: BindingFlags) -> Result<RSafeArray> 
+    fn members<M>(&self, binding_attr: BindingFlags) -> Result<Vec<M>> 
         where M: PtrContainer<_MemberInfo>
     {
         let p = self.ptr_mut();
-        let ppsa: *mut *mut SAFEARRAY = ptr::null_mut();
+        let mut psa: *mut SAFEARRAY = ptr::null_mut();
         let hr = unsafe {
-            (*p).GetMembers(binding_attr, ppsa)
+            (*p).GetMembers(binding_attr, &mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(unsafe {*ppsa}), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _MemberInfo, M}, _Type)
     }
 
-    fn member<M>(&self, name: String, member_types: Option<MemberTypes>, binding_flags: BindingFlags) -> Result<RSafeArray>
+    fn member<M>(&self, name: String, member_types: Option<MemberTypes>, binding_flags: BindingFlags) -> Result<Vec<M>>
         where M: PtrContainer<_MemberInfo>
     {
         let p = self.ptr_mut();
@@ -683,7 +687,7 @@ pub trait Type where Self: PtrContainer<_Type> {
                 (*p).GetMember_2(bs.as_sys(), binding_flags, &mut ppm)
             }
         };
-        SUCCEEDED!(hr, RSafeArray::from(ppm), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, ppm, *mut IUnknown, *mut _MemberInfo, M}, _Type)
     }
 
     fn nested_type<T>(&self, name: String, binding_flags: BindingFlags) -> Result<T> 
@@ -698,7 +702,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, T::from(ppt), _Type)
     }
 
-    fn nested_types<T>(&self, binding_flags: BindingFlags) -> Result<RSafeArray> 
+    fn nested_types<T>(&self, binding_flags: BindingFlags) -> Result<Vec<T>> 
         where T: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
@@ -706,10 +710,10 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetNestedTypes(binding_flags, &mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Type, T}, _Type)
     }
 
-    fn events<E>(&self, binding_flags: Option<BindingFlags>) -> Result<RSafeArray> 
+    fn events<E>(&self, binding_flags: Option<BindingFlags>) -> Result<Vec<E>> 
         where E: PtrContainer<_EventInfo>
     {
         let p = self.ptr_mut();
@@ -723,7 +727,7 @@ pub trait Type where Self: PtrContainer<_Type> {
                 (*p).GetEvents(&mut e)
             }
         };
-        SUCCEEDED!(hr, RSafeArray::from(e), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, e, *mut IUnknown, *mut _EventInfo, E}, _Type)
     }
 
     fn event<E>(&self, name: String, flags: BindingFlags) -> Result<E>
@@ -739,14 +743,14 @@ pub trait Type where Self: PtrContainer<_Type> {
     }
 
     //#[incomplete]
-    fn find_interfaces<TF, T, V, E>(&self, _filter: TF, _criteria: V) -> Result<RSafeArray> 
+    fn find_interfaces<TF, T, V, E>(&self, _filter: TF, _criteria: V) -> Result<RSafeArray<T>> 
         where TF: PtrContainer<_TypeFilter>,
               T: PtrContainer<_Type>,
               V: PtrContainer<E>
     {
         unimplemented!();
     }
-    fn interfaces<T>(&self) -> Result<RSafeArray> 
+    fn interfaces<T>(&self) -> Result<Vec<T>> 
         where T: PtrContainer<_Type>
     {
         let p = self.ptr_mut();
@@ -754,7 +758,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetInterfaces(&mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Type, T}, _Type)
     }
 
     fn interface<T>(&self, name: String, ignore_case: bool) -> Result<T> 
@@ -770,7 +774,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, T::from(t), _Type)
     }
 
-    fn constructors<C>(&self, binding_attrs: BindingFlags) -> Result<RSafeArray> 
+    fn constructors<C>(&self, binding_attrs: BindingFlags) -> Result<Vec<C>> 
         where C: PtrContainer<_ConstructorInfo>
     {
         let p = self.ptr_mut();
@@ -778,7 +782,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetConstructors(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _ConstructorInfo, C}, _Type)
     }
 
     fn defined<T>(&self, attr_type: T, inherit: bool) -> Result<bool>
@@ -794,7 +798,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         SUCCEEDED!(hr, ret < 0, _Type)
     }
 
-    fn custom_attributes<T, A>(&self, inherit: bool, attr_type: Option<T>) -> Result<RSafeArray>
+    fn custom_attributes<T, A>(&self, inherit: bool, attr_type: Option<T>) -> Result<Vec<A>>
         where A: PtrContainer<_Attribute>, 
               T: PtrContainer<_Type>
     {
@@ -810,7 +814,7 @@ pub trait Type where Self: PtrContainer<_Type> {
                 (*p).GetCustomAttributes_2(vb, &mut psa)
             }
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Attribute, A}, _Type)
     }
 
     PROPERTY!{get_DeclaringType _Type { get { declaring_type(_Type) }}}
@@ -1034,8 +1038,9 @@ pub trait MemberInfo where Self: PtrContainer<_MemberInfo> {
     PROPERTY!{get_DeclaringType _MemberInfo { get {declaring_type(_Type)}}}
     PROPERTY!{get_ReflectedType _MemberInfo { get {reflected_type(_Type)}}}
     
-    fn custom_attributes<T>(&self, inherit: bool, attr_type: Option<T>) -> Result<RSafeArray>
-        where T: PtrContainer<_Type>
+    fn custom_attributes<T, A>(&self, inherit: bool, attr_type: Option<T>) -> Result<Vec<A>>
+        where T: PtrContainer<_Type>, 
+              A: PtrContainer<_Attribute>
     {
         let p = self.ptr_mut();
         let mut psa: *mut SAFEARRAY = ptr::null_mut();
@@ -1049,7 +1054,7 @@ pub trait MemberInfo where Self: PtrContainer<_MemberInfo> {
                 (*p).GetCustomAttributes_2(vb, &mut psa)
             }
         };
-        SUCCEEDED!(hr, RSafeArray::from(psa), _MemberInfo)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Attribute, A}, _MemberInfo)
     }
 
     fn is_defined<T>(&self, attr_type: T, inherit: bool) -> Result<bool> 

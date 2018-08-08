@@ -1,7 +1,8 @@
 use std::ops::Deref;
 use std::mem;
 use winapi::ctypes::c_void;
-use winapi::shared::wtypes::{VARENUM, VARIANT_BOOL, VARTYPE,     VT_ARRAY, VT_BOOL,  
+use winapi::shared::wtypes::{VARENUM, VARIANT_BOOL, VARTYPE,     VT_ARRAY, 
+                             VT_BSTR, VT_BOOL,  
                              VT_BYREF,     VT_DISPATCH, VT_I1,    VT_I2,       
                              VT_I4,        VT_I8,       VT_R4,    VT_R8,     
                              VT_UI1,       VT_UI2,      VT_UI4,   VT_UI8,      
@@ -9,6 +10,9 @@ use winapi::shared::wtypes::{VARENUM, VARIANT_BOOL, VARTYPE,     VT_ARRAY, VT_BO
 use winapi::um::unknwnbase::IUnknown;
 use winapi::um::oaidl::{IDispatch, SAFEARRAY, VARIANT, VARIANT_n1, __tagVARIANT, VARIANT_n3};
 
+use bstring;
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Primitive {
     I8(i8), //matches general machine understanding of char, not Rust's
     I16(i16), 
@@ -21,6 +25,7 @@ pub enum Primitive {
     U32(u32), 
     U64(u64), 
     Bool(bool), 
+    BString(String),
     //VT_ERROR, VT_CY, VT_DATE, VT_BSTR
 }
 
@@ -40,11 +45,13 @@ impl Primitive {
             U32(_) => VT_UI4, 
             U64(_) => VT_UI8, 
             Bool(_) => VT_BOOL,
+            BString(_) => VT_BSTR,
         };
         vt as u16
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Pointer {
     Unknown(*mut IUnknown),
     Dispatch(*mut IDispatch),
@@ -90,6 +97,7 @@ impl Pointer {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Variant {
     VariantPointer(Pointer), 
     VariantPrimitive(Primitive)
@@ -145,6 +153,7 @@ FROM_IMPLS!{
     (prim => u32,  U32)
     (prim => u64,  U64)
     (prim => bool, Bool)
+    (prim => String, BString)
     (comp => i8,   PI8)
     (comp => i16,  PI16)
     (comp => i32,  PI32)
@@ -290,6 +299,11 @@ impl From<Variant> for VARIANT {
                         let vb_value: VARIANT_BOOL = if val {-1} else {0};
                         *n_ptr = vb_value;
                     },
+                    BString(inner) => unsafe {
+                        let mut n_ptr = n3.bstrVal_mut();
+                        let bs: bstring::BString = From::from(inner);
+                        *n_ptr = bs.as_sys();
+                    },
                 };
                 n3
             }
@@ -376,6 +390,14 @@ impl From<VARIANT> for Variant {
             };
             let mut b_val = val == -1;
             Variant::VariantPointer(Pointer::PBool(&mut b_val))
+        }
+        else if vt as u32 == VT_BSTR {
+            let val = unsafe {
+                let n_ptr = n3.bstrVal();
+                *n_ptr
+            };
+            let bs: bstring::BString = bstring::BString::from_ptr_safe(val);
+            Variant::VariantPrimitive(Primitive::BString(bs.to_string()))
         }
         else {
             VTYPE_MAP!{vt as u32, n3,

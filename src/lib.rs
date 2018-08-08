@@ -6,9 +6,10 @@ extern crate winapi;
 
 extern crate mscorlib_sys;
 
+#[macro_use]pub mod macros;
+
 mod bstring;
 mod collections;
-#[macro_use]pub mod macros;
 mod params;
 mod primitives;
 mod result;
@@ -24,8 +25,6 @@ pub use collections::*;
 pub use bstring::*;
 pub use primitives::*;
 pub use result::*;
-pub use safearray::*;
-//pub use variant::*;
 pub use wrappers::*;
 
 use mscorlib_sys::system::reflection::{_Assembly, _AssemblyName, _Binder, _ConstructorInfo, _FieldInfo, _EventInfo, _MemberInfo, 
@@ -33,7 +32,6 @@ _MethodBase, _Module, _ParameterInfo, _PropertyInfo, _Type};
 use mscorlib_sys::system::collections::{ICollection, IComparer, IDictionary, IDictionaryEnumerator, 
 IEnumerable, IEnumerator, IEqualityComparer, IHashCodeProvider, IList};
 use mscorlib_sys::system::{IComparable};
-
 
 macro_rules! BLANKET_IMPLS {
     ($({$tr:ty, $ptr_ty:ty},)*) => {

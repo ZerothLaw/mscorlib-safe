@@ -1,3 +1,4 @@
+#![recursion_limit="128"]
 extern crate proc_macro;
 extern crate proc_macro2;
 extern crate syn;
@@ -42,6 +43,13 @@ pub fn pointer_container_derive(input: proc_macro::TokenStream) -> proc_macro::T
                         }
                         fn from(p: *mut #elem) -> #name {
                             #name {#f_name: p}
+                        }
+                        fn into_variant(&self) -> Variant {
+                            use std::mem;
+                            use winapi::um::unknwnbase::IUnknown;
+                            let p = self.ptr_mut();
+                            let p: *mut IUnknown = unsafe {mem::transmute::<*mut #elem, *mut IUnknown>(p)};
+                            Variant::from(p)
                         }
                     }
                 };
