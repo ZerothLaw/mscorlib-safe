@@ -134,6 +134,6 @@ impl PtrContainer<u16> for BString {
 	}
 
 	fn into_variant(&self) -> Variant {
-		Variant::from(unsafe{self.as_sys()})
+		Variant::from(self.to_string())
 	}
 }

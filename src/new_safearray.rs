@@ -11,7 +11,7 @@ use winapi::shared::wtypes::{VARENUM, VARTYPE,VT_BOOL, VT_BSTR, VT_DISPATCH,
                              VT_UI4,  VT_VARIANT};
 use winapi::shared::wtypes::{BSTR, VARIANT_BOOL};
 
-use winapi::um::oaidl::{IDispatch, LPSAFEARRAY, LPSAFEARRAYBOUND, SAFEARRAY, SAFEARRAYBOUND, VARIANT};
+use winapi::um::oaidl::{IDispatch, LPSAFEARRAYBOUND, SAFEARRAY, SAFEARRAYBOUND, VARIANT};
 use winapi::um::unknwnbase::IUnknown;
 
 use bstring;
@@ -47,6 +47,8 @@ extern "system" {
     pub fn SafeArrayPutElement(psa: LPSAFEARRAY, rgIndices: *const c_long, pv: *mut c_void) -> HRESULT;
 }
 
+pub use winapi::um::oaidl::LPSAFEARRAY;
+
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct IUnknownTransmuter<T> {
     pub from_ptr: fn(*mut IUnknown) -> T, 
@@ -60,7 +62,7 @@ pub struct IDispatchTransmuter<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum RSafeArray<T> {
+pub enum RSafeArray<T=i32> {
     I16(Vec<i16>), //VT_I2
     I32(Vec<i32>), //VT_I4,
     F32(Vec<f32>), //VT_R4, 
@@ -305,7 +307,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         let mut vt: *mut VARIANT = ptr::null_mut();
                         let hr = SafeArrayGetElement(psa, &ix, &mut vt as *mut _ as *mut c_void);
                         println!("loop {} - hr = 0x{:x}", ix, hr);
-                        let vr = Variant::from(*vt);
+                        let vr = Variant::from_c_variant(*vt);
                         vc.push(vr);
                     }
                     RSafeArray::Variant(vc)
@@ -436,7 +438,7 @@ impl<T> From<RSafeArray<T>> for *mut SAFEARRAY{
         }
         else if let RSafeArray::Variant(array) = rsa {
             for (ix, mut elem) in array.into_iter().enumerate() {
-                let mut var_elem = VARIANT::from(elem);
+                let mut var_elem = elem.into_c_variant();
                 let _hr = unsafe {
                     SafeArrayPutElement(psa, &(ix as i32), &mut var_elem as *mut _ as *mut c_void)
                 };

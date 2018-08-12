@@ -1,12 +1,10 @@
 //use winapi::um::oaidl::SAFEARRAY;
-
 use mscorlib_sys::system::reflection::{ _Type};
 use mscorlib_sys::system::reflection::InterfaceMapping as comInterfaceMapping;
 use mscorlib_sys::system::reflection::_MethodInfo;
 
 use wrappers::PtrContainer;
 use new_safearray::RSafeArray;
-
 
 pub struct InterfaceMapping<PtrTarget, PtrInterface, M> 
     where PtrTarget: PtrContainer<_Type>, 
@@ -33,3 +31,4 @@ impl<PtrTarget, PtrInterface, M>  From<comInterfaceMapping> for InterfaceMapping
         }
     }
 }
+

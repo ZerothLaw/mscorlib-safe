@@ -3,7 +3,7 @@ use std::ptr;
 
 use winapi::ctypes::c_long; 
 use winapi::shared::wtypes::VARIANT_BOOL;
-use winapi::um::oaidl::{IDispatch, VARIANT};
+use winapi::um::oaidl::{VARIANT};
 
 use mscorlib_sys::system::{IComparable, _Array};
 use mscorlib_sys::system::collections::{DictionaryEntry, ICollection, IComparer, IDictionary, IDictionaryEnumerator, 
@@ -64,8 +64,7 @@ pub trait Comparable where Self: PtrContainer<IComparable> {
         where R: Comparable + PtrContainer<IComparable>
     {
         let lhs_ptr: *mut IComparable = self.ptr_mut();
-        let p_dispatch = unsafe{mem::transmute::<*mut IComparable, *mut IDispatch>(rhs.ptr_mut())};
-        let rhs_vt : VARIANT = VARIANT::from(Variant::from(p_dispatch));
+        let rhs_vt : VARIANT = rhs.into_variant().into_c_variant();
         let mut ret: c_long = 0;
         let hr = unsafe {
             (*lhs_ptr).CompareTo(rhs_vt, &mut ret)
@@ -81,8 +80,8 @@ pub trait Comparer where Self: PtrContainer<IComparer> {
               R: PtrContainer<TRight>
     {
         let p = self.ptr_mut();
-        let lhs_vt : VARIANT = VARIANT::from(lhs.into_variant());
-        let rhs_vt : VARIANT = VARIANT::from(rhs.into_variant());
+        let lhs_vt = lhs.into_variant().into_c_variant();
+        let rhs_vt = rhs.into_variant().into_c_variant();
         let mut ret: c_long = 0;
         let hr = unsafe {
             (*p).Compare(lhs_vt, rhs_vt, &mut ret)
@@ -97,12 +96,12 @@ pub trait Dictionary where Self: PtrContainer<IDictionary> {
               V: PtrContainer<TDispatch2>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(key.into_variant());
+        let vt = key.into_variant().into_c_variant();
         let mut ret: VARIANT = unsafe {mem::zeroed()};
         let hr = unsafe {
             (*p).get_Item(vt, &mut ret)
         };
-        SUCCEEDED!(hr, Variant::from(ret), IDictionary)
+        SUCCEEDED!(hr, Variant::from_c_variant(ret), IDictionary)
     }
 
     fn item_mut<K, V, TDispatch, TDispatch2>(&mut self, key: K, value: V) -> Result<()>
@@ -110,8 +109,8 @@ pub trait Dictionary where Self: PtrContainer<IDictionary> {
               V: PtrContainer<TDispatch2>
     {
         let p = self.ptr_mut();
-        let kvt : VARIANT = VARIANT::from(key.into_variant());
-        let vvt : VARIANT = VARIANT::from(value.into_variant());
+        let kvt = key.into_variant().into_c_variant();
+        let vvt = value.into_variant().into_c_variant();
         let hr = unsafe {
             (*p).putref_Item(kvt, vvt)
         };
@@ -142,7 +141,7 @@ pub trait Dictionary where Self: PtrContainer<IDictionary> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(obj.into_variant());
+        let vt = obj.into_variant().into_c_variant();
         let mut pb: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).Contains(vt, &mut pb)
@@ -154,8 +153,8 @@ pub trait Dictionary where Self: PtrContainer<IDictionary> {
         where K: PtrContainer<TKey>,
               V: PtrContainer<TValue>
     {
-        let k : VARIANT = VARIANT::from(key.into_variant());
-        let v : VARIANT = VARIANT::from(value.into_variant());
+        let k = key.into_variant().into_c_variant();
+        let v = value.into_variant().into_c_variant();
         let p = self.ptr_mut();
         let hr = unsafe {
             (*p).Add(k, v)
@@ -204,7 +203,7 @@ pub trait Dictionary where Self: PtrContainer<IDictionary> {
         where K: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(key.into_variant());
+        let vt = key.into_variant().into_c_variant();
         let hr = unsafe {
             (*p).Remove(vt)
         };
@@ -213,30 +212,28 @@ pub trait Dictionary where Self: PtrContainer<IDictionary> {
 }
 
 pub trait DictionaryEnumerator where Self: PtrContainer<IDictionaryEnumerator> {
-    fn key<DV>(&self) -> Result<DV>
-        where DV: From<*mut VARIANT>
+    fn key<DV>(&self) -> Result<Variant>
     {
         let p = self.ptr_mut();
         let mut vt: VARIANT = unsafe{mem::zeroed()};
         let hr = unsafe {
             (*p).get_key(&mut vt)
         };
-        SUCCEEDED!(hr, DV::from(&mut vt), IDictionaryEnumerator)
+        SUCCEEDED!(hr, Variant::from_c_variant(vt), IDictionaryEnumerator)
     }
 
-    fn value<DV>(&self) -> Result<DV>
-        where DV: From<*mut VARIANT>
+    fn value<DV>(&self) -> Result<Variant>
     {
         let p = self.ptr_mut();
         let mut vt: VARIANT = unsafe{mem::zeroed()};
         let hr = unsafe {
             (*p).get_val(&mut vt)
         };
-        SUCCEEDED!(hr, DV::from(&mut vt), IDictionaryEnumerator)
+        SUCCEEDED!(hr, Variant::from_c_variant(vt), IDictionaryEnumerator)
     }
 
     fn entry<DE>(&self) -> Result<DE>
-        where DE: From<*mut DictionaryEntry>
+        where DE: PtrContainer<DictionaryEntry>
     {
         let p = self.ptr_mut();
         let mut de: DictionaryEntry = unsafe {mem::zeroed()};
@@ -249,7 +246,7 @@ pub trait DictionaryEnumerator where Self: PtrContainer<IDictionaryEnumerator> {
 
 pub trait Enumerable where Self: PtrContainer<IEnumerable> {
     fn enumerator<EN>(&self) -> Result<EN>
-        where EN: From<*mut IEnumerator>
+        where EN: PtrContainer<IEnumerator>
     {
         let p = self.ptr_mut();
         let mut pie: *mut IEnumerator = ptr::null_mut();
@@ -271,15 +268,14 @@ pub trait Enumerator where Self: PtrContainer<IEnumerator> {
         SUCCEEDED!(hr, vb < 0,IEnumerator)
     }
     
-    fn current<V>(&self) -> Result<V>
-        where V: From<*mut VARIANT>
+    fn current<V>(&self) -> Result<Variant>
     {
         let p = self.ptr_mut();
         let mut vt: VARIANT = unsafe{mem::zeroed()};
         let hr = unsafe {
             (*p).get_Current(&mut vt) 
         };
-        SUCCEEDED!(hr, V::from(&mut vt),IEnumerator)
+        SUCCEEDED!(hr, Variant::from_c_variant(vt),IEnumerator)
     }
 
     fn reset(&self) -> Result<()>{
@@ -297,8 +293,8 @@ pub trait EqualityComparer where Self: PtrContainer<IEqualityComparer> {
               Y: PtrContainer<TOut2>, 
     {
         let p = self.ptr_mut();
-        let xvt : VARIANT = VARIANT::from(x.into_variant());
-        let yvt : VARIANT = VARIANT::from(y.into_variant());
+        let xvt = x.into_variant().into_c_variant();
+        let yvt = y.into_variant().into_c_variant();
 
         let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
@@ -311,7 +307,7 @@ pub trait EqualityComparer where Self: PtrContainer<IEqualityComparer> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(obj.into_variant());
+        let vt = obj.into_variant().into_c_variant();
         let mut cl: c_long = 0;
         let hr = unsafe {
             (*p).GetHashCode(vt, &mut cl)
@@ -325,7 +321,7 @@ pub trait HashCodeProvider where Self: PtrContainer<IHashCodeProvider> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(obj.into_variant());
+        let vt = obj.into_variant().into_c_variant();
         let mut cl: c_long = 0;
         let hr = unsafe {
             (*p).GetHashCode(vt, &mut cl)
@@ -335,22 +331,21 @@ pub trait HashCodeProvider where Self: PtrContainer<IHashCodeProvider> {
 }
 
 pub trait List where Self: PtrContainer<IList> {
-    fn item<V>(&self, index: i32) -> Result<V>
-        where V: From<*mut VARIANT>
+    fn item<V>(&self, index: i32) -> Result<Variant>
     {
         let p = self.ptr_mut();
         let mut v: VARIANT = unsafe {mem::zeroed()};
         let hr = unsafe {
             (*p).get_Item(index as c_long, &mut v)
         };
-        SUCCEEDED!(hr, V::from(&mut v), IList)
+        SUCCEEDED!(hr, Variant::from_c_variant(v), IList)
     }
 
     fn item_mut<V, TOut>(&self, index: i32, value: V) -> Result<()>
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(value.into_variant());
+        let vt = value.into_variant().into_c_variant();
         let hr = unsafe {
             (*p).putref_Item(index, vt)
         };
@@ -361,7 +356,7 @@ pub trait List where Self: PtrContainer<IList> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(value.into_variant());
+        let vt = value.into_variant().into_c_variant();
         let mut ret: c_long = 0;
         let hr = unsafe {
             (*p).Add(vt, &mut ret)
@@ -373,7 +368,7 @@ pub trait List where Self: PtrContainer<IList> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(value.into_variant());
+        let vt = value.into_variant().into_c_variant();
         let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).Contains(vt, &mut vb)
@@ -411,7 +406,7 @@ pub trait List where Self: PtrContainer<IList> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(value.into_variant());
+        let vt = value.into_variant().into_c_variant();
         let mut cl: c_long = 0;
         let hr = unsafe {
             (*p).IndexOf(vt, &mut cl)
@@ -423,7 +418,7 @@ pub trait List where Self: PtrContainer<IList> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(value.into_variant());
+        let vt = value.into_variant().into_c_variant();
         let hr = unsafe {
             (*p).Insert(index, vt)
         };
@@ -434,7 +429,7 @@ pub trait List where Self: PtrContainer<IList> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt : VARIANT = VARIANT::from(value.into_variant());
+        let vt = value.into_variant().into_c_variant();
         let hr = unsafe {
             (*p).Remove(vt)
         };

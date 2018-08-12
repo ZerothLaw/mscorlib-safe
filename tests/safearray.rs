@@ -12,7 +12,7 @@ use winapi::um::oaidl::IDispatch;
 
 use mscorlib_sys::system::reflection::_Type;
 
-use mscorlib_safe::new_variant::{Variant, Primitive};
+use mscorlib_safe::new_variant::{Variant};
 use mscorlib_safe::new_safearray::{RSafeArray, SafeArrayCreate, SafeArrayDestroy, SafeArrayPutElement, SafeArrayGetLBound, SafeArrayGetUBound,SafeArrayGetVartype, SafeArrayGetElement};
 
 #[test]
@@ -170,7 +170,7 @@ fn test_variant() {
     }
     let rsa: RSafeArray<Variant> = RSafeArray::from(vc);
     if let RSafeArray::Variant(array) = rsa {
-        assert_eq!(array[50], Variant::VariantPrimitive(Primitive::Bool(true)));
+        assert_eq!(array[50], Variant::Bool(true));
     }
     else {
         panic!("Incorrect type");

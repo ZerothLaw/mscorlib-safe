@@ -14,5 +14,7 @@ mscorlib-sys = {version = "^0.1.9"}
 winapi = {version = "0.3.5", features=["winerror", "oaidl", "oleauto"]}
 mscorlib_safe_derive = {version = "0.1.1", path = "mscorlib_safe_derive"}
 failure = "0.1.2"
+rust_decimal = "0.10.0"
+chrono = "0.4"
 
 [workspace]

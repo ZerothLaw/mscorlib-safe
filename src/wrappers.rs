@@ -27,7 +27,6 @@ use winapi::shared::wtypes::VARIANT_BOOL;
 
 use winapi::um::oaidl::IDispatch;
 use winapi::um::oaidl::ITypeInfo;
-use winapi::um::oaidl::VARIANT;
 use winapi::um::oaidl::SAFEARRAY;
 use winapi::um::unknwnbase::{IUnknown};
 
@@ -249,7 +248,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt = VARIANT::from(value.into_variant());
+        let vt = value.into_variant().into_c_variant();
         let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).Equals(vt, &mut vb)
@@ -608,7 +607,7 @@ pub trait Type where Self: PtrContainer<_Type> {
     fn instance_of_type(&self, variant: Variant) -> Result<bool> 
     {
         let p = self.ptr_mut();
-        let v = VARIANT::from(variant);
+        let v = variant.into_c_variant();
         let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).IsInstanceOfType(v, &mut vb)
@@ -886,7 +885,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt = VARIANT::from(value.into_variant());
+        let vt = value.into_variant().into_c_variant();
         let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).Equals(vt, &mut vb)
@@ -997,7 +996,7 @@ pub trait MemberInfo where Self: PtrContainer<_MemberInfo> {
         where V: PtrContainer<TOut>
     {
         let p = self.ptr_mut();
-        let vt = VARIANT::from(value.into_variant());
+        let vt = value.into_variant().into_c_variant();
         let mut vb: VARIANT_BOOL = 0;
         let hr = unsafe {
             (*p).Equals(vt, &mut vb)

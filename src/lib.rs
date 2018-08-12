@@ -8,14 +8,15 @@ extern crate mscorlib_sys;
 
 #[macro_use]pub mod macros;
 
+extern crate rust_decimal;
+
+extern crate chrono;
+
 mod bstring;
 mod collections;
 mod params;
-mod primitives;
 mod result;
-mod safearray;
 mod struct_wrappers;
-//#[macro_use]mod variant;
 mod wrappers;
 
 pub mod new_variant;
@@ -23,7 +24,6 @@ pub mod new_safearray;
 
 pub use collections::*;
 pub use bstring::*;
-pub use primitives::*;
 pub use result::*;
 pub use wrappers::*;
 
