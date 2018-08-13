@@ -12,8 +12,8 @@ use winapi::um::oaidl::IDispatch;
 
 use mscorlib_sys::system::reflection::_Type;
 
-use mscorlib_safe::new_variant::{Variant};
-use mscorlib_safe::new_safearray::{RSafeArray, SafeArrayCreate, SafeArrayDestroy, SafeArrayPutElement, SafeArrayGetLBound, SafeArrayGetUBound,SafeArrayGetVartype, SafeArrayGetElement};
+use mscorlib_safe::new_variant::{Variant, UInt, Int};
+use mscorlib_safe::new_safearray::{RSafeArray, SafeArrayCreate, SafeArrayDestroy, SafeArrayPutElement, SafeArrayGetVartype, SafeArrayGetElement};
 
 #[test]
 fn from_rust_safearray_to_low_level() {
@@ -21,7 +21,7 @@ fn from_rust_safearray_to_low_level() {
     for ix in 0i16..100i16 {
         v.push(ix)
     }
-    let rsa: RSafeArray<i16> = RSafeArray::I16(v);
+    let rsa: RSafeArray<i16> = RSafeArray::Shorts(v);
     let ovt = rsa.vartype();
     let psa = LPSAFEARRAY::from(rsa);
 
@@ -29,14 +29,15 @@ fn from_rust_safearray_to_low_level() {
     let hr = unsafe {
         SafeArrayGetVartype(psa, &mut vt)
     };
-    //println!("hr: 0x{:x}", hr);
+    assert_eq!(hr, 0);
     assert_eq!(ovt, vt as u32);
 
     let mut val: i16 = 0;
     let hr = unsafe {
         SafeArrayGetElement(psa, &10, &mut val as *mut _ as *mut c_void)
     };
-    //println!("hr: 0x{:x}", hr);
+
+    assert_eq!(hr, 0);
     assert_eq!(val, 10);
 
     unsafe {SafeArrayDestroy(psa)};
@@ -57,7 +58,7 @@ fn from_low_level_to_rust_safearray(){
     let rsa: RSafeArray<u16> = RSafeArray::from(psa);
     assert_eq!(rsa.len(), 9);
     assert_eq!(rsa.vartype(), VT_I2);
-    if let RSafeArray::I16(array) = rsa {
+    if let RSafeArray::Shorts(array) = rsa {
         assert_eq!(array[3], 3)
     } else {
         panic!("Incorrect type")   
@@ -71,7 +72,7 @@ fn test_i32() {
         vc.push(ix);
     }
     let rsa: RSafeArray<i32> = RSafeArray::from(vc);
-    if let RSafeArray::I32(array) = rsa {
+    if let RSafeArray::Longs(array) = rsa {
         assert_eq!(array[50], 50);
     }
     else {
@@ -83,12 +84,12 @@ fn test_i32() {
 fn test_f32() {
     let mut vc = Vec::new();
     let mut val = 0.0f32;
-    for ix in 0..100 {
+    for _ix in 0..100 {
         vc.push(val);
         val += 1.0f32;
     }
     let rsa: RSafeArray<f32> = RSafeArray::from(vc);
-    if let RSafeArray::F32(array) = rsa {
+    if let RSafeArray::Floats(array) = rsa {
         assert_eq!(array[50], 50.0);
     }
     else {
@@ -100,12 +101,12 @@ fn test_f32() {
 fn test_f64() {
     let mut vc = Vec::new();
     let mut val = 0.0f64;
-    for ix in 0..100 {
+    for _ix in 0..100 {
         vc.push(val);
         val += 1.0f64;
     }
     let rsa: RSafeArray<f64> = RSafeArray::from(vc);
-    if let RSafeArray::F64(array) = rsa {
+    if let RSafeArray::Doubles(array) = rsa {
         assert_eq!(array[50], 50.0);
     }
     else {
@@ -117,12 +118,12 @@ fn test_f64() {
 fn test_str() {
     let mut vc = Vec::new();
     let mut val = 0.0f64;
-    for ix in 0..100 {
+    for _ix in 0..100 {
         vc.push(val.to_string());
         val += 1.0f64;
     }
     let rsa: RSafeArray<String> = RSafeArray::from(vc);
-    if let RSafeArray::BString(array) = rsa {
+    if let RSafeArray::BStrings(array) = rsa {
         assert_eq!(array[50] , "50");
     }
     else {
@@ -133,12 +134,12 @@ fn test_str() {
 #[test]
 fn test_idispatch() {
     let mut vc = Vec::new();
-    for ix in 0..100 {
+    for _ix in 0..100 {
         let p: *mut IDispatch = ptr::null_mut();
         vc.push(p);
     }
     let rsa: RSafeArray<_Type> = RSafeArray::from(vc);
-    if let RSafeArray::Dispatch(array, _) = rsa {
+    if let RSafeArray::Dispatchs(array, _) = rsa {
         assert!(array[50].is_null());
     }
     else {
@@ -153,7 +154,7 @@ fn test_bool() {
         vc.push(ix % 2 == 0);
     }
     let rsa: RSafeArray<bool> = RSafeArray::from(vc);
-    if let RSafeArray::Bool(array) = rsa {
+    if let RSafeArray::Bools(array) = rsa {
         assert_eq!(array[50], true);
     }
     else {
@@ -169,7 +170,7 @@ fn test_variant() {
         vc.push(vt);
     }
     let rsa: RSafeArray<Variant> = RSafeArray::from(vc);
-    if let RSafeArray::Variant(array) = rsa {
+    if let RSafeArray::Variants(array) = rsa {
         assert_eq!(array[50], Variant::Bool(true));
     }
     else {
@@ -184,7 +185,7 @@ fn test_i8() {
         vc.push(ix);
     }
     let rsa:RSafeArray<i8> = RSafeArray::from(vc);
-    if let RSafeArray::SChar(array) = rsa {
+    if let RSafeArray::Chars(array) = rsa {
         assert_eq!(array[50], 50i8);
     }
     else {
@@ -199,7 +200,7 @@ fn test_u8() {
         vc.push(ix);
     }
     let rsa:RSafeArray<u8> = RSafeArray::from(vc);
-    if let RSafeArray::UChar(array) = rsa {
+    if let RSafeArray::UChars(array) = rsa {
         assert_eq!(array[50], 50u8);
     }
     else {
@@ -214,7 +215,7 @@ fn test_u16() {
         vc.push(ix);
     }
     let rsa: RSafeArray<u16> = RSafeArray::from(vc);
-    if let RSafeArray::UShort(array) = rsa {
+    if let RSafeArray::UShorts(array) = rsa {
         assert_eq!(array[50], 50u16);
     }
     else {
@@ -229,7 +230,7 @@ fn test_u32() {
         vc.push(ix);
     }
     let rsa: RSafeArray<u32> = RSafeArray::from(vc);
-    if let RSafeArray::ULong(array) = rsa {
+    if let RSafeArray::ULongs(array) = rsa {
         assert_eq!(array[50], 50u32);
     }
     else {
@@ -237,68 +238,32 @@ fn test_u32() {
     }
 }
 
-#[cfg(target_arch="x86_64")]
 #[test]
 fn test_int() {
     let mut vc = Vec::new();
-    let val = 1i64 << 32;
+    let val = 1i32 << 30;
     for ix in val..(val+100){
-        vc.push(ix);
+        vc.push(Int(ix));
     }
     let rsa: RSafeArray<i64> = RSafeArray::from(vc);
-    if let RSafeArray::Int(array) = rsa {
-        assert_eq!(array[50], 4294967346i64);
+    if let RSafeArray::Ints(array) = rsa {
+        assert_eq!(array[50], Int(1073741874i32));
     }
     else {
         panic!("Incorrect type");
     }
 }
 
-#[cfg(target_arch="x86_64")]
 #[test]
 fn test_uint() {
     let mut vc = Vec::new();
-    let val = 1u64 << 32;
+    let val = 1u32 << 30;
     for ix in val..(val+100){
-        vc.push(ix);
+        vc.push(UInt(ix));
     }
     let rsa: RSafeArray<u64> = RSafeArray::from(vc);
-    if let RSafeArray::UInt(array) = rsa {
-        assert_eq!(array[50], 4294967346u64);
-    }
-    else {
-        panic!("Incorrect type");
-    }
-}
-
-#[cfg(target_arch="x86")]
-#[test]
-fn test_int() {
-    let mut vc = Vec::new();
-    let val = 1i32 << 32;
-    for ix in val..(val+100){
-        vc.push(ix);
-    }
-    let rsa: RSafeArray<i32> = RSafeArray::from(vc);
-    if let RSafeArray::Int(array) = rsa {
-        assert_eq!(array[50], 4294967346i32);
-    }
-    else {
-        panic!("Incorrect type");
-    }
-}
-
-#[cfg(target_arch="x86")]
-#[test]
-fn test_uint() {
-    let mut vc = Vec::new();
-    let val = 1u32 << 32;
-    for ix in val..(val+100){
-        vc.push(ix);
-    }
-    let rsa: RSafeArray<i32> = RSafeArray::from(vc);
-    if let RSafeArray::UInt(array) = rsa {
-        assert_eq!(array[50], 4294967346u32);
+    if let RSafeArray::UInts(array) = rsa {
+        assert_eq!(array[50], UInt(1073741874u32));
     }
     else {
         panic!("Incorrect type");

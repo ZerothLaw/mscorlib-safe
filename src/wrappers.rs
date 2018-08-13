@@ -116,7 +116,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let hr = unsafe {
             (*p).GetReferencedAssemblies(&mut passemblies)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Dispatch, passemblies, *mut IDispatch, *mut _Assembly, A}, _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Dispatchs, passemblies, *mut IDispatch, *mut _Assembly, A}, _Assembly)
     }
 
     fn module<M>(&self, name: String) -> Result<M> 
@@ -145,7 +145,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
                 (*p).GetModules(&mut pmodules)
             }
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pmodules, *mut IUnknown, *mut _Module, M}, _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, pmodules, *mut IUnknown, *mut _Module, M}, _Assembly)
     }
 
     fn loaded_modules<M>(&self, get_resource_modules: Option<bool>) -> Result<Vec<M>> 
@@ -163,7 +163,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
             }
         };
         
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pmodules, *mut IUnknown, *mut _Module, M}, _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, pmodules, *mut IUnknown, *mut _Module, M}, _Assembly)
     }
     //#[incomplete]
     fn create_instance<V>(&self, _type_name: String, _ignore_case: Option<bool>) -> Result<V> 
@@ -205,7 +205,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
                 (*p).GetCustomAttributes_2(vb_inherit, &mut pattrs)
             }
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pattrs, *mut IUnknown, *mut _Attribute, A}, _Assembly )
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, pattrs, *mut IUnknown, *mut _Attribute, A}, _Assembly )
     }
     
     fn manifest_resource_names(&self) -> Result<Vec<String>>
@@ -215,7 +215,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let hr = unsafe {
             (*p).GetManifestResourceNames(&mut pnames)
         };
-        SUCCEEDED!(hr, SIMPLE_EXTRACT!{BString, pnames, BString}, _Assembly )
+        SUCCEEDED!(hr, SIMPLE_EXTRACT!{BStrings, pnames, BString}, _Assembly )
     }
 
     fn files<F>(&self, resource_modules: Option<bool>) -> Result<Vec<F>> 
@@ -232,7 +232,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
                 (*p).GetFiles(&mut pfiles)
             }
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pfiles, *mut IUnknown, *mut _FileStream, F}, _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, pfiles, *mut IUnknown, *mut _FileStream, F}, _Assembly)
     }
 
     fn to_str(&self) -> Result<String>{
@@ -368,7 +368,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let hr = unsafe {
             (*p).GetExportedTypes(&mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Type, S} , _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _Type, S} , _Assembly)
     }
 
     fn types<S>(&self) -> Result<Vec<S>> 
@@ -379,7 +379,7 @@ pub trait Assembly where Self: PtrContainer<_Assembly> {
         let hr = unsafe {
             (*p).GetTypes(&mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Type, S}, _Assembly)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _Type, S}, _Assembly)
     }
 
     fn manifest_resource_stream<T, S>(&self, t: T, name: String) -> Result<S> 
@@ -528,7 +528,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetProperties(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _PropertyInfo, PI}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _PropertyInfo, PI}, _Type)
     }
 
     fn property<P>(&self, name: String, binding_attrs: BindingFlags) -> Result<P>
@@ -551,7 +551,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetFields(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _FieldInfo, F}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _FieldInfo, F}, _Type)
     }
 
     fn field<F>(&self, binding_attrs: BindingFlags) -> Result<Vec<F>> 
@@ -562,7 +562,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetField(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _FieldInfo, F}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _FieldInfo, F}, _Type)
     }
 
     fn methods<M>(&self, binding_attrs: BindingFlags) -> Result<Vec<M>> 
@@ -573,7 +573,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetMethods(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _MethodInfo, M}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _MethodInfo, M}, _Type)
     }
 
     //still need to implement GetMethod with binder, types, and modifiers
@@ -653,7 +653,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetDefaultMembers(&mut pm)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, pm, *mut IUnknown, *mut _MemberInfo, M}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, pm, *mut IUnknown, *mut _MemberInfo, M}, _Type)
     }
 
     //#[incomplete]
@@ -669,7 +669,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetMembers(binding_attr, &mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _MemberInfo, M}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _MemberInfo, M}, _Type)
     }
 
     fn member<M>(&self, name: String, member_types: Option<MemberTypes>, binding_flags: BindingFlags) -> Result<Vec<M>>
@@ -686,7 +686,7 @@ pub trait Type where Self: PtrContainer<_Type> {
                 (*p).GetMember_2(bs.as_sys(), binding_flags, &mut ppm)
             }
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, ppm, *mut IUnknown, *mut _MemberInfo, M}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, ppm, *mut IUnknown, *mut _MemberInfo, M}, _Type)
     }
 
     fn nested_type<T>(&self, name: String, binding_flags: BindingFlags) -> Result<T> 
@@ -709,7 +709,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetNestedTypes(binding_flags, &mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Type, T}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _Type, T}, _Type)
     }
 
     fn events<E>(&self, binding_flags: Option<BindingFlags>) -> Result<Vec<E>> 
@@ -726,7 +726,7 @@ pub trait Type where Self: PtrContainer<_Type> {
                 (*p).GetEvents(&mut e)
             }
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, e, *mut IUnknown, *mut _EventInfo, E}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, e, *mut IUnknown, *mut _EventInfo, E}, _Type)
     }
 
     fn event<E>(&self, name: String, flags: BindingFlags) -> Result<E>
@@ -757,7 +757,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetInterfaces(&mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Type, T}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _Type, T}, _Type)
     }
 
     fn interface<T>(&self, name: String, ignore_case: bool) -> Result<T> 
@@ -781,7 +781,7 @@ pub trait Type where Self: PtrContainer<_Type> {
         let hr = unsafe {
             (*p).GetConstructors(binding_attrs, &mut psa)
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _ConstructorInfo, C}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _ConstructorInfo, C}, _Type)
     }
 
     fn defined<T>(&self, attr_type: T, inherit: bool) -> Result<bool>
@@ -813,7 +813,7 @@ pub trait Type where Self: PtrContainer<_Type> {
                 (*p).GetCustomAttributes_2(vb, &mut psa)
             }
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Attribute, A}, _Type)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _Attribute, A}, _Type)
     }
 
     PROPERTY!{get_DeclaringType _Type { get { declaring_type(_Type) }}}
@@ -1053,7 +1053,7 @@ pub trait MemberInfo where Self: PtrContainer<_MemberInfo> {
                 (*p).GetCustomAttributes_2(vb, &mut psa)
             }
         };
-        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknown, psa, *mut IUnknown, *mut _Attribute, A}, _MemberInfo)
+        SUCCEEDED!(hr, EXTRACT_VECTOR_FROM_SAFEARRAY!{Unknowns, psa, *mut IUnknown, *mut _Attribute, A}, _MemberInfo)
     }
 
     fn is_defined<T>(&self, attr_type: T, inherit: bool) -> Result<bool> 

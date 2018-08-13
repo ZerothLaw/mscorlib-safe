@@ -1,21 +1,26 @@
+use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::mem;
+use std::ops::Deref;
 use std::ptr;
 
 use winapi::ctypes::{c_long, c_void};
 
 use winapi::shared::minwindef::{UINT, ULONG};
 use winapi::shared::winerror::HRESULT;
-use winapi::shared::wtypes::{VARENUM, VARTYPE,VT_BOOL, VT_BSTR, VT_DISPATCH, 
-                             VT_INT,  VT_I1,  VT_I2,   VT_I4,   VT_R4,       
-                             VT_R8,   VT_UINT, VT_UNKNOWN, VT_UI1,  VT_UI2,      
-                             VT_UI4,  VT_VARIANT};
+use winapi::shared::wtypes::{VARENUM, VARTYPE, VT_BOOL,    VT_BSTR, 
+                             VT_CY,   VT_DATE, VT_DECIMAL, VT_DISPATCH,                              VT_INT,  VT_I1,  VT_I2,   VT_I4,   VT_R4,       
+                             VT_R8,   VT_UINT, VT_UNKNOWN, VT_UI1,  
+                             VT_UI2,  VT_UI4,  VT_VARIANT};
 use winapi::shared::wtypes::{BSTR, VARIANT_BOOL};
 
 use winapi::um::oaidl::{IDispatch, LPSAFEARRAYBOUND, SAFEARRAY, SAFEARRAYBOUND, VARIANT};
 use winapi::um::unknwnbase::IUnknown;
+use wrappers::PtrContainer;
 
 use bstring;
 use new_variant::Variant;
+
 /*{ 
 if let RSafeArray::Unknown(array) = RSafeArray::from(pmodules) {
     array.into_iter().map(|item| {
@@ -49,98 +54,107 @@ extern "system" {
 
 pub use winapi::um::oaidl::LPSAFEARRAY;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct IUnknownTransmuter<T> {
-    pub from_ptr: fn(*mut IUnknown) -> T, 
-    pub into_unknown: fn(*mut T) -> *mut IUnknown,
-}
+use rust_decimal::Decimal;
+use new_variant::{Currency, Date, Int, UInt};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct IDispatchTransmuter<T> {
-    pub from_ptr: fn(*mut IDispatch) -> T,
-    pub into_dispatch: fn(*mut T) -> *mut IDispatch
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum RSafeArray<T=i32> {
-    I16(Vec<i16>), //VT_I2
-    I32(Vec<i32>), //VT_I4,
-    F32(Vec<f32>), //VT_R4, 
-    F64(Vec<f64>), //VT_R8, 
-    //VT_CY, 
-    //VT_DATE,
-    BString(Vec<String>), //VT_BSTR,
-    Dispatch(Vec<*mut IDispatch>, Option<IDispatchTransmuter<T>>), //VT_DISPATCH, 
-    Bool(Vec<bool>), //VT_BOOL, need to translate between rust bool and VARIANT_BOOL,
-    Variant(Vec<Variant>), //VT_VARIANT,
-    Unknown(Vec<*mut IUnknown>, Option<IUnknownTransmuter<T>>), //VT_UNKNOWN, 
-    //VT_DECIMAL,
+pub enum RSafeArray<P=i32> {
+    Shorts(Vec<i16>), //VT_I2
+    Longs(Vec<i32>), //VT_I4,
+    Floats(Vec<f32>), //VT_R4, 
+    Doubles(Vec<f64>), //VT_R8, 
+    Currencies(Vec<Currency>), //VT_CY, 
+    Dates(Vec<Date>),//VT_DATE,
+    BStrings(Vec<String>), //VT_BSTR,
+    Dispatchs(Vec<*mut IDispatch>, Option<P>), //VT_DISPATCH, 
+    Bools(Vec<bool>), //VT_BOOL, need to translate between rust bool and VARIANT_BOOL,
+    Variants(Vec<Variant>), //VT_VARIANT,
+    Unknowns(Vec<*mut IUnknown>, Option<P>), //VT_UNKNOWN, 
+    Decimals(Vec<Decimal>),//VT_DECIMAL,
     //VT_RECORD,
-    SChar(Vec<i8>), //VT_I1, 
-    UChar(Vec<u8>), //VT_UI1, 
-    UShort(Vec<u16>), //VT_UI2, 
-    ULong(Vec<u32>), //VT_UI4, 
-    
-    #[cfg(target_arch="x86_64")]
-    Int(Vec<i64>), //VT_INT, 
-
-    #[cfg(target_arch="x86_64")]
-    UInt(Vec<u64>), //VT_UINT, 
-    
-    #[cfg(target_arch="x86")]
-    Int(Vec<i32>), //VT_INT, 
-    
-    #[cfg(target_arch="x86")]
-    UInt(Vec<u32>), //VT_UINT,
+    Chars(Vec<i8>), //VT_I1, 
+    UChars(Vec<u8>), //VT_UI1, 
+    UShorts(Vec<u16>), //VT_UI2, 
+    ULongs(Vec<u32>), //VT_UI4,
+    Ints(Vec<Int>), //VT_INT, 
+    UInts(Vec<UInt>), //VT_UINT,
 }
 
 impl<T> RSafeArray<T> {
     pub fn len(&self) -> usize {
         match self {
-            RSafeArray::I16(inner) => inner.len(),
-            RSafeArray::I32(inner) => inner.len(),
-            RSafeArray::F32(inner) => inner.len(),
-            RSafeArray::F64(inner) => inner.len(),
-            RSafeArray::BString(inner) => inner.len(), 
-            RSafeArray::Dispatch(inner, _) => inner.len(), 
-            RSafeArray::Bool(inner) => inner.len(), 
-            RSafeArray::Variant(inner) => inner.len(), 
-            RSafeArray::Unknown(inner, _) => inner.len(), 
-            RSafeArray::SChar(inner) => inner.len(), 
-            RSafeArray::UChar(inner) => inner.len(),
-            RSafeArray::UShort(inner) => inner.len(), 
-            RSafeArray::ULong(inner) => inner.len(), 
-            RSafeArray::Int(inner) => inner.len(), 
-            RSafeArray::UInt(inner) => inner.len(),
+            RSafeArray::Shorts(inner) => inner.len(),
+            RSafeArray::Longs(inner) => inner.len(),
+            RSafeArray::Floats(inner) => inner.len(),
+            RSafeArray::Doubles(inner) => inner.len(),
+            RSafeArray::Currencies(inner) => inner.len(),
+            RSafeArray::Dates(inner) => inner.len(),
+            RSafeArray::BStrings(inner) => inner.len(), 
+            RSafeArray::Dispatchs(inner, _) => inner.len(), 
+            RSafeArray::Bools(inner) => inner.len(), 
+            RSafeArray::Variants(inner) => inner.len(), 
+            RSafeArray::Unknowns(inner, _) => inner.len(), 
+            RSafeArray::Decimals(inner) => inner.len(),
+            RSafeArray::Chars(inner) => inner.len(), 
+            RSafeArray::UChars(inner) => inner.len(),
+            RSafeArray::UShorts(inner) => inner.len(), 
+            RSafeArray::ULongs(inner) => inner.len(), 
+            RSafeArray::Ints(inner) => inner.len(), 
+            RSafeArray::UInts(inner) => inner.len(),
         }
     }
     pub fn vartype(&self) -> VARENUM {
         match self { 
-            RSafeArray::I16(_) => VT_I2, 
-            RSafeArray::I32(_) => VT_I4, 
-            RSafeArray::F32(_) => VT_R4, 
-            RSafeArray::F64(_) => VT_R8, 
-            RSafeArray::BString(_) => VT_BSTR,
-            RSafeArray::Dispatch(_, _) => VT_DISPATCH, 
-            RSafeArray::Bool(_) => VT_BOOL, 
-            RSafeArray::Variant(_) => VT_VARIANT, 
-            RSafeArray::Unknown(_, _) => VT_UNKNOWN, 
-            RSafeArray::SChar(_) => VT_I1, 
-            RSafeArray::UChar(_) => VT_UI1, 
-            RSafeArray::UShort(_) => VT_UI2, 
-            RSafeArray::ULong(_) => VT_UI4, 
-            RSafeArray::Int(_) => VT_INT, 
-            RSafeArray::UInt(_) => VT_UINT,
+            RSafeArray::Shorts(_) => VT_I2, 
+            RSafeArray::Longs(_) => VT_I4, 
+            RSafeArray::Floats(_) => VT_R4, 
+            RSafeArray::Doubles(_) => VT_R8, 
+            RSafeArray::Currencies(_) => VT_CY,
+            RSafeArray::Dates(_) => VT_DATE, 
+            RSafeArray::BStrings(_) => VT_BSTR,
+            RSafeArray::Dispatchs(_, _) => VT_DISPATCH, 
+            RSafeArray::Bools(_) => VT_BOOL, 
+            RSafeArray::Variants(_) => VT_VARIANT, 
+            RSafeArray::Unknowns(_, _) => VT_UNKNOWN, 
+            RSafeArray::Decimals(_) => VT_DECIMAL,
+            RSafeArray::Chars(_) => VT_I1, 
+            RSafeArray::UChars(_) => VT_UI1, 
+            RSafeArray::UShorts(_) => VT_UI2, 
+            RSafeArray::ULongs(_) => VT_UI4, 
+            RSafeArray::Ints(_) => VT_INT, 
+            RSafeArray::UInts(_) => VT_UINT,
         }
+    }
+
+    pub fn from_vec_dispatch<TOut: Deref<Target=IDispatch>>(vec: Vec<T>) -> RSafeArray<T> 
+        where T: PtrContainer<TOut>
+    {
+        let stripped_vec: Vec<*mut IDispatch> = vec.into_iter().map(|item|{
+            let ptr = item.ptr_mut();
+            let id = unsafe { mem::transmute::<*mut TOut, *mut IDispatch>(ptr)};
+            id
+        }).collect();
+        RSafeArray::Dispatchs(stripped_vec, None)
+    }
+
+    pub fn from_vec_unknown<TOut: Deref<Target=IUnknown>>(vec: Vec<T>) -> RSafeArray<T>
+        where T: PtrContainer<TOut> 
+    {
+        let stripped_vec: Vec<*mut IUnknown> = vec.into_iter().map(|item|{
+            let ptr = item.ptr_mut();
+            let id = unsafe { mem::transmute::<*mut TOut, *mut IUnknown>(ptr)};
+            id
+        }).collect();
+        RSafeArray::Unknowns(stripped_vec, None)
     }
 }
 
 macro_rules! FROM_IMPLS {
-    (@branch, Dispatch, $var:ident) => {
-        RSafeArray::Dispatch($var, None)
+    (@branch, Dispatchs, $var:ident) => {
+        RSafeArray::Dispatchs($var, None)
     };
-    (@branch, Unknown, $var:ident) => {
-        RSafeArray::Unknown($var, None)
+    (@branch, Unknowns, $var:ident) => {
+        RSafeArray::Unknowns($var, None)
     };
     (@branch, $enum_name:ident, $var:ident) => {
         RSafeArray::$enum_name($var)
@@ -158,27 +172,21 @@ macro_rules! FROM_IMPLS {
 }
 
 FROM_IMPLS!{
-    {I16, i16}
-    {I32, i32}
-    {F32, f32}
-    {F64, f64}
-    {BString, String}
-    {Dispatch, *mut IDispatch}
-    {Bool, bool}
-    {Variant, Variant}
-    {Unknown, *mut IUnknown}
-    {SChar, i8}
-    {UChar, u8}
-    {UShort, u16}
-    {ULong, u32}
-    #[cfg(target_arch="x86_64")]
-    {Int, i64}
-    #[cfg(target_arch="x86_64")]
-    {UInt, u64}
-    #[cfg(target_arch="x86")]
-    {Int, i32}
-    #[cfg(target_arch="x86")]
-    {UInt, u32}
+    {Shorts, i16}
+    {Longs, i32}
+    {Floats, f32}
+    {Doubles, f64}
+    {BStrings, String}
+    {Dispatchs, *mut IDispatch}
+    {Bools, bool}
+    {Variants, Variant}
+    {Unknowns, *mut IUnknown}
+    {Chars, i8}
+    {UChars, u8}
+    {UShorts, u16}
+    {ULongs, u32}
+    {Ints, Int}
+    {UInts, UInt}
 }
 
 struct SafeArrayDestructor {
@@ -238,7 +246,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(i);
                     }
-                    RSafeArray::I16(vc)
+                    RSafeArray::Shorts(vc)
                 },
                 VT_I4 => unsafe {
                     let mut vc = Vec::new();
@@ -248,7 +256,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(i);
                     }
-                    RSafeArray::I32(vc)
+                    RSafeArray::Longs(vc)
                 },
                 VT_R4 => unsafe {
                     let mut vc = Vec::new();
@@ -258,7 +266,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(i);
                     }
-                    RSafeArray::F32(vc)
+                    RSafeArray::Floats(vc)
                 },
                 VT_R8 => unsafe {
                     let mut vc = Vec::new();
@@ -268,7 +276,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(i);
                     }
-                    RSafeArray::F64(vc)
+                    RSafeArray::Doubles(vc)
                 },
                 VT_BSTR => unsafe {
                     let mut vc = Vec::new();
@@ -279,7 +287,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         let s = bstring::BString::from_ptr_safe(bs).to_string();
                         vc.push(s)
                     }
-                    RSafeArray::BString(vc)
+                    RSafeArray::BStrings(vc)
                 },
                 VT_DISPATCH => unsafe {
                     let mut vc = Vec::new();
@@ -289,7 +297,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(p);
                     }
-                    RSafeArray::Dispatch(vc, None)
+                    RSafeArray::Dispatchs(vc, None)
                 },
                 VT_BOOL => unsafe {
                     let mut vc = Vec::new();
@@ -299,7 +307,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(vb == -1);
                     }
-                    RSafeArray::Bool(vc)
+                    RSafeArray::Bools(vc)
                 },
                 VT_VARIANT => unsafe {
                     let mut vc = Vec::new();
@@ -310,7 +318,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         let vr = Variant::from_c_variant(*vt);
                         vc.push(vr);
                     }
-                    RSafeArray::Variant(vc)
+                    RSafeArray::Variants(vc)
                 },
                 VT_UNKNOWN => unsafe {
                     let mut vc = Vec::new();
@@ -320,7 +328,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(pu);
                     }
-                    RSafeArray::Unknown(vc, None)
+                    RSafeArray::Unknowns(vc, None)
                 },
                 VT_I1 => unsafe {
                     let mut vc = Vec::new();
@@ -330,7 +338,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(i);
                     }
-                    RSafeArray::SChar(vc)
+                    RSafeArray::Chars(vc)
                 },
                 VT_UI1 => unsafe {
                     let mut vc = Vec::new();
@@ -340,7 +348,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(i);
                     }
-                    RSafeArray::UChar(vc)
+                    RSafeArray::UChars(vc)
                 },
                 VT_UI2 => unsafe {
                     let mut vc = Vec::new();
@@ -350,7 +358,7 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(i);
                     }
-                    RSafeArray::UShort(vc)
+                    RSafeArray::UShorts(vc)
                 },
                 VT_UI4 => unsafe {
                     let mut vc = Vec::new();
@@ -360,37 +368,29 @@ impl<T> From<*mut SAFEARRAY> for RSafeArray<T> {
                         println!("loop {} - hr = 0x{:x}", ix, hr);
                         vc.push(i);
                     }
-                    RSafeArray::ULong(vc)
+                    RSafeArray::ULongs(vc)
                 },
                 VT_INT => unsafe {
                     let mut vc = Vec::new();
                     for ix in lower_bound..upper_bound {
-                        #[cfg(target_arch="x86_64")]
-                        let mut i = 0i64;
-
-                        #[cfg(target_arch="x86")]
                         let mut i = 0i32;
 
                         let hr = SafeArrayGetElement(psa, &ix, &mut i as *mut _ as *mut c_void);
                         println!("loop {} - hr = 0x{:x}", ix, hr);
-                        vc.push(i);
+                        vc.push(Int(i));
                     }
-                    RSafeArray::Int(vc)
+                    RSafeArray::Ints(vc)
                 },
                 VT_UINT => unsafe {
                     let mut vc = Vec::new();
                     for ix in lower_bound..upper_bound {
-                        #[cfg(target_arch="x86_64")]
-                        let mut i = 0u64;
-
-                        #[cfg(target_arch="x86")]
                         let mut i = 0u32;
 
                         let hr = SafeArrayGetElement(psa, &ix, &mut i as *mut _ as *mut c_void);
                         println!("loop {} - hr = 0x{:x}", ix, hr);
-                        vc.push(i);
+                        vc.push(UInt(i));
                     }
-                    RSafeArray::UInt(vc)
+                    RSafeArray::UInts(vc)
                 },
                 _ => panic!("Not supported!")
             }
@@ -418,7 +418,9 @@ macro_rules! FROM_RUST_MATCH {
     };
 }
 
-impl<T> From<RSafeArray<T>> for *mut SAFEARRAY{
+impl<T> From<RSafeArray<T>> for *mut SAFEARRAY
+    where T: Debug
+{
     //consumes underlying object, is this memory safe? 
     fn from(rsa: RSafeArray<T>) -> *mut SAFEARRAY {
         let c_elements: ULONG = rsa.len() as u32;
@@ -427,8 +429,10 @@ impl<T> From<RSafeArray<T>> for *mut SAFEARRAY{
         let psa = unsafe {
             SafeArrayCreate(vartype as u16, 1, &mut sab)
         };
+
+        //Allocate struct to safely destroy SAFEARRAY if there is a panic or crash during this process.
         let mut sad = SafeArrayDestructor::new(psa);
-        if let RSafeArray::Bool(array) = rsa {
+        if let RSafeArray::Bools(array) = rsa {
             for (ix, mut elem) in array.into_iter().enumerate() {
                 let mut vb_elem: VARIANT_BOOL = if elem {-1} else {0};
                 let _hr = unsafe {
@@ -436,7 +440,7 @@ impl<T> From<RSafeArray<T>> for *mut SAFEARRAY{
                 };
             }
         }
-        else if let RSafeArray::Variant(array) = rsa {
+        else if let RSafeArray::Variants(array) = rsa {
             for (ix, mut elem) in array.into_iter().enumerate() {
                 let mut var_elem = elem.into_c_variant();
                 let _hr = unsafe {
@@ -444,7 +448,7 @@ impl<T> From<RSafeArray<T>> for *mut SAFEARRAY{
                 };
             }
         }
-        else if let RSafeArray::BString(array) = rsa {
+        else if let RSafeArray::BStrings(array) = rsa {
             for(ix, mut elem) in array.into_iter().enumerate() {
                 let mut bs: bstring::BString = From::from(elem);
                 let _hr = unsafe {
@@ -452,24 +456,24 @@ impl<T> From<RSafeArray<T>> for *mut SAFEARRAY{
                 };
             }
         }
-        else if let RSafeArray::Dispatch(array, _) = rsa {
+        else if let RSafeArray::Dispatchs(array, _) = rsa {
             for (ix, mut elem) in array.into_iter().enumerate() {
                 let _hr = unsafe {
                     SafeArrayPutElement(psa, &(ix as i32), &mut elem as *mut _ as *mut c_void)
                 };
             }
         }
-        else if let RSafeArray::Unknown(array, _) = rsa {
+        else if let RSafeArray::Unknowns(array, _) = rsa {
             for (ix, mut elem) in array.into_iter().enumerate() {
-                let _hr = unsafe {
+                let hr = unsafe {
                     SafeArrayPutElement(psa, &(ix as i32), &mut elem as *mut _ as *mut c_void)
                 };
             }
         }
         else {
             FROM_RUST_MATCH!{rsa, psa, 
-                {I16,   I32,    F32,   F64, SChar, 
-                 UChar, UShort, ULong, Int, UInt,}
+                {Shorts,   Longs,    Floats,   Doubles, Chars, 
+                 UChars, UShorts, ULongs, Ints, UInts,}
             };
         }
         sad.inner = ptr::null_mut(); //ensure struct doesn't destroy the safearray

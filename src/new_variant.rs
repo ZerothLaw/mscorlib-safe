@@ -42,7 +42,7 @@ const VT_PINT: VARENUM = VT_BYREF|VT_INT;
 const VT_PUINT: VARENUM = VT_BYREF|VT_UINT;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct Currency(i64);
+pub struct Currency(pub i64);
 
 impl From<i64> for Currency {
     fn from(source: i64) -> Currency {
@@ -63,10 +63,10 @@ impl From<CY> for Currency {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct SCode(i32);
+pub struct SCode(pub i32);
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct Int(i32);
+pub struct Int(pub i32);
 
 impl From<i32> for Int {
     fn from(i: i32) -> Int {
@@ -75,7 +75,7 @@ impl From<i32> for Int {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct UInt(u32);
+pub struct UInt(pub u32);
 
 impl From<u32> for UInt {
     fn from(u: u32) -> UInt {
@@ -84,9 +84,9 @@ impl From<u32> for UInt {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct Date(DATE);
+pub struct Date(pub DATE);
 
-fn build_c_decimal(dec: Decimal) -> DECIMAL {
+pub fn build_c_decimal(dec: Decimal) -> DECIMAL {
     let scale = dec.scale() as u8;
     let sign = if dec.is_sign_positive() {0} else {DECIMAL_NEG};
     let serial = dec.serialize();
@@ -111,7 +111,7 @@ fn build_c_decimal(dec: Decimal) -> DECIMAL {
     }
 }
 
-fn build_rust_decimal(dec: DECIMAL) -> Decimal {
+pub fn build_rust_decimal(dec: DECIMAL) -> Decimal {
     let sign = if dec.sign == DECIMAL_NEG {true} else {false};
     Decimal::from_parts((dec.Lo64 & 0xFFFFFFFF) as u32, 
                         ((dec.Lo64 >> 32) & 0xFFFFFFFF) as u32, 
