@@ -10,8 +10,6 @@ extern crate mscorlib_sys;
 
 extern crate rust_decimal;
 
-extern crate chrono;
-
 mod bstring;
 mod collections;
 mod params;

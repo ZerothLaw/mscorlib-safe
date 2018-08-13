@@ -8,7 +8,7 @@ use winapi::ctypes::{c_long, c_void};
 
 use winapi::shared::minwindef::{UINT, ULONG};
 use winapi::shared::winerror::HRESULT;
-use winapi::shared::wtypes::{VARENUM, VARTYPE, VT_BOOL,    VT_BSTR, 
+use winapi::shared::wtypes::{CY, VARENUM, VARTYPE, VT_BOOL,    VT_BSTR, 
                              VT_CY,   VT_DATE, VT_DECIMAL, VT_DISPATCH,                              VT_INT,  VT_I1,  VT_I2,   VT_I4,   VT_R4,       
                              VT_R8,   VT_UINT, VT_UNKNOWN, VT_UI1,  
                              VT_UI2,  VT_UI4,  VT_VARIANT};
@@ -16,10 +16,13 @@ use winapi::shared::wtypes::{BSTR, VARIANT_BOOL};
 
 use winapi::um::oaidl::{IDispatch, LPSAFEARRAYBOUND, SAFEARRAY, SAFEARRAYBOUND, VARIANT};
 use winapi::um::unknwnbase::IUnknown;
+use rust_decimal::Decimal;
+
+use new_variant::{Currency, Date, Int, UInt, Variant, build_c_decimal};
+
 use wrappers::PtrContainer;
 
 use bstring;
-use new_variant::Variant;
 
 /*{ 
 if let RSafeArray::Unknown(array) = RSafeArray::from(pmodules) {
@@ -53,9 +56,6 @@ extern "system" {
 }
 
 pub use winapi::um::oaidl::LPSAFEARRAY;
-
-use rust_decimal::Decimal;
-use new_variant::{Currency, Date, Int, UInt};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum RSafeArray<P=i32> {
@@ -465,8 +465,32 @@ impl<T> From<RSafeArray<T>> for *mut SAFEARRAY
         }
         else if let RSafeArray::Unknowns(array, _) = rsa {
             for (ix, mut elem) in array.into_iter().enumerate() {
-                let hr = unsafe {
+                let _hr = unsafe {
                     SafeArrayPutElement(psa, &(ix as i32), &mut elem as *mut _ as *mut c_void)
+                };
+            }
+        }
+        else if let RSafeArray::Currencies(array) = rsa {
+            for (ix, mut elem) in array.into_iter().enumerate() {
+                let mut cy = CY::from(elem);
+                let _hr = unsafe {
+                    SafeArrayPutElement(psa, &(ix as i32), &mut cy as *mut _ as *mut c_void)
+                };
+            }
+        }
+        else if let RSafeArray::Dates(array) = rsa {
+            for (ix, mut elem) in array.into_iter().enumerate() {
+                let mut dt = elem.0;
+                let _hr = unsafe {
+                    SafeArrayPutElement(psa, &(ix as i32), &mut dt as *mut _ as *mut c_void)
+                };
+            }
+        }
+        else if let RSafeArray::Decimals(array) = rsa {
+            for (ix, mut elem) in array.into_iter().enumerate() {
+                let mut cdec = build_c_decimal(elem);
+                let _hr = unsafe {
+                    SafeArrayPutElement(psa, &(ix as i32), &mut cdec as *mut _ as *mut c_void)
                 };
             }
         }
