@@ -44,7 +44,7 @@ See examples\integration.rs for an example of how to work with the wrappers.
 
 Or add this line to your .toml file:
 
-````
+```
 [dependencies]
 mscorlib-safe = "0.1.3"
 ```
