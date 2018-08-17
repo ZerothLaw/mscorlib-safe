@@ -1,6 +1,6 @@
 [package]
 name = "mscorlib_safe_derive"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Tyler Laing <trinioler@gmail.com>"]
 description = "Safe wrappers around FFI bindings to mscorlib"
 repository = "https://github.com/ZerothLaw/mscorlib-safe"

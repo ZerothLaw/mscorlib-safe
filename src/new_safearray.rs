@@ -1,3 +1,24 @@
+// new_safearray.rs - MIT License
+//  Copyright (c) 2018 Tyler Laing (ZerothLaw)
+// 
+//  Permission is hereby granted, free of charge, to any person obtaining a copy
+//  of this software and associated documentation files (the "Software"), to deal
+//  in the Software without restriction, including without limitation the rights
+//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//  copies of the Software, and to permit persons to whom the Software is
+//  furnished to do so, subject to the following conditions:
+// 
+//  The above copyright notice and this permission notice shall be included in all
+//  copies or substantial portions of the Software.
+// 
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//  SOFTWARE.
+
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::mem;
@@ -9,7 +30,8 @@ use winapi::ctypes::{c_long, c_void};
 use winapi::shared::minwindef::{UINT, ULONG};
 use winapi::shared::winerror::HRESULT;
 use winapi::shared::wtypes::{CY, VARENUM, VARTYPE, VT_BOOL,    VT_BSTR, 
-                             VT_CY,   VT_DATE, VT_DECIMAL, VT_DISPATCH,                              VT_INT,  VT_I1,  VT_I2,   VT_I4,   VT_R4,       
+                             VT_CY,   VT_DATE, VT_DECIMAL, VT_DISPATCH,                              
+                             VT_INT,  VT_I1,  VT_I2,   VT_I4,   VT_R4,       
                              VT_R8,   VT_UINT, VT_UNKNOWN, VT_UI1,  
                              VT_UI2,  VT_UI4,  VT_VARIANT};
 use winapi::shared::wtypes::{BSTR, VARIANT_BOOL};

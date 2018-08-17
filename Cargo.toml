@@ -1,6 +1,6 @@
 [package]
 name = "mscorlib-safe"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Tyler Laing <trinioler@gmail.com>"]
 description = "Safe wrappers around FFI bindings to mscorlib"
 repository = "https://github.com/ZerothLaw/mscorlib-safe"
@@ -10,9 +10,9 @@ categories = ["os::windows-apis", "api-bindings"]
 license = "MIT"
 
 [dependencies]
-mscorlib-sys = {version = "^0.1.9"}
+mscorlib-sys = {version = "^0.1.10"}
 winapi = {version = "0.3.5", features=["winerror", "oaidl", "oleauto"]}
-mscorlib_safe_derive = {version = "0.1.2", path = "mscorlib_safe_derive"}
+mscorlib_safe_derive = {version = "0.1.3", path = "mscorlib_safe_derive"}
 failure = "0.1.2"
 rust_decimal = "0.10.0"
 
